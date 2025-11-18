@@ -310,30 +310,101 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Check payment status by txid
+  app.get("/api/payments/status/:txid", requireAuth, async (req, res) => {
+    try {
+      const { txid } = req.params;
+      const payment = await storage.getPaymentByTxid(txid);
+      
+      if (!payment) {
+        return res.status(404).json({ error: "Pagamento não encontrado" });
+      }
+
+      // Verify the payment belongs to the current user
+      if (payment.userId !== req.session.userId) {
+        return res.status(403).json({ error: "Acesso negado" });
+      }
+
+      res.json({ 
+        status: payment.status,
+        amount: payment.amount,
+        createdAt: payment.createdAt,
+      });
+    } catch (error) {
+      console.error("Get payment status error:", error);
+      res.status(500).json({ error: "Erro ao verificar status do pagamento" });
+    }
+  });
+
   // Generate PIX payment
   app.post("/api/payments/pix", requireAuth, async (req, res) => {
     try {
       const { amount } = req.body;
       
-      // Create payment record
+      if (!amount || typeof amount !== 'number' || amount <= 0) {
+        return res.status(400).json({ error: "Valor inválido" });
+      }
+
+      // Call PushinPay API to generate PIX first
+      const pushinpayToken = process.env.PUSHINPAY_TOKEN;
+      const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
+        ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`
+        : undefined;
+
+      if (!pushinpayToken) {
+        console.error("PUSHINPAY_TOKEN not configured");
+        return res.status(500).json({ error: "Configuração de pagamento não encontrada" });
+      }
+
+      // Convert amount to cents (R$35.00 = 3500)
+      const amountInCents = Math.round(amount * 100);
+
+      console.log(`Generating PIX for R$${amount} (${amountInCents} cents)`);
+
+      const pushinpayResponse = await fetch("https://api.pushinpay.com.br/api/pix/cashIn", {
+        method: "POST",
+        headers: {
+          "Authorization": pushinpayToken,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          value: amountInCents,
+          webhook_url: webhookUrl,
+        }),
+      });
+
+      if (!pushinpayResponse.ok) {
+        const errorText = await pushinpayResponse.text();
+        console.error("PushinPay API error:", pushinpayResponse.status, errorText);
+        return res.status(500).json({ error: "Erro ao gerar PIX. Tente novamente." });
+      }
+
+      const pixData = await pushinpayResponse.json();
+      console.log("PushinPay response:", { id: pixData.id, status: pixData.status });
+
+      // Create payment record with PushinPay transaction ID
       const payment = await storage.createPayment({
         userId: req.session.userId!,
         amount: amount.toString(),
         status: "pending",
+        txid: pixData.id,
       });
 
-      // TODO: Call PushinPay API to generate PIX
-      // For now, return mock data
-      const mockPixData = {
-        qrCode: `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=00020126580014br.gov.bcb.pix0136${payment.id}520400005303986540${amount}5802BR5925NOME6014CIDADE6304ABCD`,
-        pixCode: `00020126580014br.gov.bcb.pix0136${payment.id}520400005303986540${amount}5802BR5925NOME6014CIDADE6304ABCD`,
-        txid: payment.id,
-      };
+      console.log(`Payment record created: ${payment.id} with txid: ${pixData.id}`);
 
-      // Update payment with txid
-      await storage.updatePayment(payment.id, { txid: payment.id });
+      // Ensure qr_code_base64 has proper data URI prefix
+      let qrCodeBase64 = pixData.qr_code_base64;
+      if (qrCodeBase64 && !qrCodeBase64.startsWith('data:image/')) {
+        qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
+      }
 
-      res.json(mockPixData);
+      res.json({
+        qrCodeBase64: qrCodeBase64,
+        qrCode: pixData.qr_code,
+        txid: pixData.id,
+        status: pixData.status,
+        amount: amount,
+      });
     } catch (error) {
       console.error("Generate PIX error:", error);
       res.status(500).json({ error: "Erro ao gerar PIX" });
@@ -366,26 +437,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Webhook from PushinPay
   app.post("/api/webhook/pushinpay", async (req, res) => {
     try {
-      const { status, txid } = req.body;
+      console.log("PushinPay webhook received:", JSON.stringify(req.body, null, 2));
       
-      // TODO: Validate webhook token
+      const { status, id } = req.body;
       
-      if (status === "paid" || status === "pago") {
+      // PushinPay uses 'id' field for transaction ID
+      const txid = id;
+      
+      if (!txid) {
+        console.error("Webhook missing transaction ID");
+        return res.status(400).json({ error: "Missing transaction ID" });
+      }
+      
+      // Normalize status to lowercase for comparison
+      const normalizedStatus = status?.toLowerCase();
+      
+      if (normalizedStatus === "paid" || normalizedStatus === "pago") {
         const payment = await storage.getPaymentByTxid(txid);
         
-        if (payment) {
-          // Update payment status
-          await storage.updatePayment(payment.id, { status: "paid" });
-          
-          // Update user status
-          await storage.updateUser(payment.userId, {
-            status: "ATIVO",
-            ultimoPagamento: new Date(),
-          });
+        if (!payment) {
+          console.error(`Payment not found for txid: ${txid}`);
+          // Return 200 to prevent PushinPay retries for unknown transactions
+          return res.json({ success: true, message: "Payment not found" });
         }
-      }
 
-      res.json({ success: true });
+        // Check if payment is already processed (idempotency)
+        if (payment.status === "paid") {
+          console.log(`Payment ${payment.id} already processed (idempotent check)`);
+          return res.json({ success: true, message: "Already processed" });
+        }
+        
+        console.log(`Payment confirmed for txid: ${txid}, user: ${payment.userId}`);
+        
+        // Update payment status
+        await storage.updatePayment(payment.id, { status: "paid" });
+        
+        // Update user status and set payment date
+        await storage.updateUser(payment.userId, {
+          status: "ATIVO",
+          ultimoPagamento: new Date(),
+        });
+        
+        console.log(`User ${payment.userId} activated successfully`);
+        
+        res.json({ success: true, message: "Payment processed" });
+      } else if (normalizedStatus === "failed" || normalizedStatus === "cancelled") {
+        const payment = await storage.getPaymentByTxid(txid);
+        
+        if (payment && payment.status !== "failed") {
+          console.log(`Payment ${payment.id} marked as failed`);
+          await storage.updatePayment(payment.id, { status: "failed" });
+        }
+        
+        res.json({ success: true, message: "Payment failed" });
+      } else {
+        console.log(`Unhandled payment status: ${status}`);
+        res.json({ success: true, message: "Status noted" });
+      }
     } catch (error) {
       console.error("Webhook error:", error);
       res.status(500).json({ error: "Erro ao processar webhook" });
