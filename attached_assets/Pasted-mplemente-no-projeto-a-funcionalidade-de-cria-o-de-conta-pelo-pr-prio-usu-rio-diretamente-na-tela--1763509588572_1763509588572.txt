@@ -1,0 +1,165 @@
+mplemente no projeto a funcionalidade de criação de conta pelo próprio usuário, diretamente na tela de login. Siga exatamente os requisitos abaixo.
+
+FRONTEND (Login Page)
+
+Na tela /login, abaixo do botão "Entrar", adicione o texto clicável:
+
+Não tem uma conta? Registrar agora
+
+
+O texto deve usar o mesmo estilo da página, tipografia e spacing.
+
+Ao clicar, abrir um pop-up modal centralizado com estilo igual ao design atual, porém no estilo "liquid glass / glassmorphism" com:
+
+fundo blur (backdrop-filter: blur(20px))
+
+borda branca semi-transparente
+
+sombra suave
+
+raio de borda igual ao restante do sistema
+
+fundo semi-transparente (#ffffff10 ou similar)
+
+manter coerência visual com o tema VectorPro
+
+Enquanto o modal estiver aberto:
+
+a página abaixo deve ficar desfocada (backdrop-filter ou overlay)
+
+desativar scroll do body
+
+O modal de registro deve conter:
+
+Título: "Criar Conta"
+
+Descrição curta: "Digite seu email para criar uma conta no VectorPro"
+
+Input: email
+
+Botão: "Registrar"
+
+Link: "Voltar ao login"
+
+Após clicar em "Registrar":
+
+chamar POST /api/auth/register
+
+exibir loading no botão
+
+se sucesso → mostrar mensagem "Enviamos um link para criação de senha em seu email"
+
+fechar modal após 3s
+
+Não criar a senha no front. A senha só será criada via link seguro enviado por email.
+
+BACKEND (Express)
+
+Adicionar nova rota:
+
+POST /api/auth/register
+
+Fluxo obrigatório:
+
+Receber { email }
+
+Validar formato de email
+
+Verificar se o usuário já existe:
+
+Se existir e status = ATIVO → retornar erro
+
+Se existir e status ≠ ATIVO → reenviar email de criação de senha
+
+Se não existir:
+
+criar usuário com:
+
+status: "INATIVO"
+password: null (permitido)
+ultimoPagamento: null
+isAdmin: false
+
+
+Gerar token de criação de senha em tabela password_resets com:
+
+id
+userId
+token (uuid)
+expiresAt (now + 24h)
+
+
+Enviar email via Resend com o template já usado no Admin para "criar senha".
+
+Retornar:
+
+{ success: true }
+
+BACKEND (Rota de Criar Senha)
+
+A rota já existe: /criar-senha?token=...
+
+Apenas garanta que:
+
+Se o token for válido:
+
+permitir criação da senha
+
+atualizar user.password com bcrypt
+
+NÃO ativar o usuário
+
+manter status = "INATIVO" até pagamento
+
+Após criar senha:
+
+redirecionar para login com mensagem "Senha criada com sucesso"
+
+BANCO DE DADOS (Drizzle)
+
+Garanta que o modelo Users permita:
+
+password: text | null
+status: "INATIVO" | "ATIVO" | "PENDENTE"
+
+
+Nenhuma alteração adicional necessária.
+
+ADMIN PANEL
+
+No painel de admin:
+
+Quando um usuário for criado pelo próprio registro, ele aparece com:
+
+status: INATIVO
+ultimoPagamento: null
+
+
+Nenhuma credencial deve ser exibida enquanto INATIVO.
+
+EMAIL (Resend)
+
+Usar exatamente o mesmo template do Admin para "criar senha", apenas substituindo:
+
+Clique no link abaixo para criar sua senha de acesso ao painel VectorPro:
+https://SEU_DOMINIO/criar-senha?token=TOKEN
+
+RESUMO DO FLUXO FINAL
+
+Usuário abre login → clica em "Registrar agora"
+
+Abre pop-up glassmorphism
+
+Ele informa email
+
+Backend cria usuário INATIVO e gera token
+
+Email enviado com link para criar senha
+
+Usuário cria senha
+
+Agora pode logar, mas painel continua bloqueado
+
+Quando pagar PIX → admin webhook → muda para ATIVO
+
+Painel libera as credenciais

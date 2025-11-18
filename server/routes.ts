@@ -232,6 +232,110 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User self-registration (public endpoint)
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      // Validate request body with Zod
+      const registerSchema = z.object({
+        email: z.string().email("Email inválido"),
+      });
+
+      const validatedData = registerSchema.parse(req.body);
+      const { email } = validatedData;
+
+      // Check if email already exists
+      const existingUser = await storage.getUserByEmail(email);
+      
+      if (existingUser) {
+        // If user exists and is ATIVO → error
+        if (existingUser.status === "ATIVO") {
+          return res.status(400).json({ 
+            error: "Este email já está cadastrado e ativo. Faça login para acessar sua conta." 
+          });
+        }
+        
+        // If user exists but not ATIVO → resend password creation email
+        console.log(`📧 [REGISTER] Resending password creation email`);
+        
+        // Generate new token
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
+
+        // Delete old tokens and create new one
+        await storage.deletePasswordResetsByUserId(existingUser.id);
+        await storage.createPasswordReset({
+          userId: existingUser.id,
+          token,
+          expiresAt,
+        });
+
+        // Send email
+        const template = emailTemplates.createPassword(email, token);
+        await sendEmail({
+          to: email,
+          subject: template.subject,
+          html: template.html,
+        });
+
+        return res.json({ 
+          success: true, 
+          message: "Email de criação de senha reenviado com sucesso!" 
+        });
+      }
+
+      // User doesn't exist → create new user with status INATIVO
+      const user = await storage.createUser({
+        email,
+        password: null, // Will be set by user via email link
+        status: "INATIVO", // Not active until password is created
+        isAdmin: "false",
+      });
+
+      // Generate secure token for password creation
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24); // Valid for 24 hours
+
+      await storage.createPasswordReset({
+        userId: user.id,
+        token,
+        expiresAt,
+      });
+
+      // Send password creation email
+      const template = emailTemplates.createPassword(email, token);
+      const emailSent = await sendEmail({
+        to: email,
+        subject: template.subject,
+        html: template.html,
+      });
+
+      if (!emailSent) {
+        console.warn(`⚠️  [REGISTER] User created but email failed to send`);
+        return res.json({
+          success: true,
+          warning: "Conta criada, mas o email não pôde ser enviado. Configure RESEND_API_KEY.",
+        });
+      }
+
+      console.log(`✅ [REGISTER] New user registered (status: INATIVO)`);
+
+      res.json({ 
+        success: true, 
+        message: "Conta criada com sucesso! Verifique seu email para criar sua senha." 
+      });
+    } catch (error: any) {
+      // Handle Zod validation errors
+      if (error.name === 'ZodError') {
+        const firstError = error.errors[0];
+        return res.status(400).json({ error: firstError.message });
+      }
+      console.error("Register error:", error);
+      res.status(500).json({ error: "Erro ao criar conta" });
+    }
+  });
+
   // ========== USER ROUTES (Admin only) ==========
   
   app.get("/api/users", requireAdmin, async (req, res) => {

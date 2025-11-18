@@ -4,12 +4,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock, Mail, MessageCircle, Sparkles } from "lucide-react";
+import RegisterModal from "./RegisterModal";
 
 interface LoginFormProps {
   title: string;
   description?: string;
   onSubmit: (email: string, password: string) => void;
   showForgotPassword?: boolean;
+  showRegister?: boolean;
   whatsappMessage?: string;
 }
 
@@ -18,10 +20,12 @@ export default function LoginForm({
   description, 
   onSubmit, 
   showForgotPassword = false,
+  showRegister = false,
   whatsappMessage
 }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +93,22 @@ export default function LoginForm({
               Entrar
             </Button>
 
+            {showRegister && (
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">
+                  Não tem uma conta?{" "}
+                  <button
+                    type="button"
+                    onClick={() => setShowRegisterModal(true)}
+                    className="text-primary hover:underline font-medium"
+                    data-testid="link-register"
+                  >
+                    Registrar agora
+                  </button>
+                </p>
+              </div>
+            )}
+
             {showForgotPassword && (
               <div className="text-center space-y-3">
                 <a
@@ -124,6 +144,12 @@ export default function LoginForm({
           </form>
         </CardContent>
       </Card>
+
+      {/* Register Modal */}
+      <RegisterModal 
+        open={showRegisterModal} 
+        onClose={() => setShowRegisterModal(false)} 
+      />
     </div>
   );
 }

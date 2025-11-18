@@ -26,6 +26,26 @@ The backend is an **Express.js** application with **TypeScript** running on **No
 
 A **role-based access** model is implemented, differentiating between client users (access to own data) and admin users (full system access). `requireAuth` and `requireAdmin` middleware protect routes, with frontend guards checking authentication status.
 
+### User Registration
+
+The system supports **two methods** for user onboarding:
+
+1. **Admin Invitation** - Admins can invite users via the admin dashboard, generating a 24-hour password creation token sent via email
+2. **Self-Registration** - Users can register directly from the login page via a glassmorphism modal (`RegisterModal.tsx`), which creates an account with status `INATIVO` and sends a password creation email
+
+**Registration Flow:**
+- User submits email via `POST /api/auth/register`
+- System creates user with status `INATIVO`, no password
+- Password creation token generated (24-hour expiry)
+- Welcome email sent with password creation link
+- User creates password → status remains `INATIVO` (credentials locked until payment)
+- User makes first payment → status changes to `ATIVO` (credentials unlocked)
+
+**Duplicate Prevention:**
+- Frontend uses ref guard + mutateAsync to prevent rapid submissions
+- Backend returns friendly message if email already exists with status `ATIVO`
+- Existing `INATIVO` users receive new password creation token
+
 ### Payment Integration
 
 The system supports a **monthly subscription of R$ 17,50**. It integrates with the **PushinPay API** for PIX payment generation. The flow involves client initiation, backend generation of a unique TXID, API call to PushinPay, storage of payment in cents, and return of QR code data. A demo mode fallback is available for testing. Webhook handling is security-hardened with X-Token validation, TXID validation, and idempotency checks. Successful payments update user status to "ATIVO" and set `ultimoPagamento`.
