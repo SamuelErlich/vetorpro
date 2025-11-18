@@ -209,16 +209,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user to check current status
       const user = await storage.getUser(reset.userId);
       
-      // Update user password and status (PENDENTE → ATIVO when password is created)
+      // Update user password and status (PENDENTE → INATIVO when password is created, waiting for first payment)
       await storage.updateUser(reset.userId, {
         password: hashedPassword,
-        status: user?.status === "PENDENTE" ? "ATIVO" : user?.status,
+        status: user?.status === "PENDENTE" ? "INATIVO" : user?.status,
       });
 
       // Delete all password reset tokens for this user
       await storage.deletePasswordResetsByUserId(reset.userId);
 
-      console.log(`✅ [CREATE-PASSWORD] Password created for user ${reset.userId}${user?.status === "PENDENTE" ? " (status: PENDENTE → ATIVO)" : ""}`);
+      console.log(`✅ [CREATE-PASSWORD] Password created for user ${reset.userId}${user?.status === "PENDENTE" ? " (status: PENDENTE → INATIVO - aguardando primeiro pagamento)" : ""}`);
 
       res.json({ success: true, message: "Senha criada com sucesso! Você já pode fazer login." });
     } catch (error: any) {
