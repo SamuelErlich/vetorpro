@@ -8,23 +8,27 @@ import PaymentCalendar from "@/components/PaymentCalendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { User as UserType, Credential, Payment } from "@shared/schema";
+
+type AuthMeResponse = { user: UserType };
+type CredentialsResponse = { credentials: Credential[]; locked: boolean };
 
 export default function ClientDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   // Get current user
-  const { data: userData, isLoading: userLoading } = useQuery({
+  const { data: userData, isLoading: userLoading } = useQuery<AuthMeResponse>({
     queryKey: ['/api/auth/me'],
   });
 
   // Get credentials
-  const { data: credentialsData, isLoading: credentialsLoading } = useQuery({
+  const { data: credentialsData, isLoading: credentialsLoading } = useQuery<CredentialsResponse>({
     queryKey: ['/api/credentials'],
   });
 
   // Get payments
-  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
+  const { data: paymentsData, isLoading: paymentsLoading } = useQuery<Payment[]>({
     queryKey: ['/api/payments'],
   });
 
@@ -95,12 +99,19 @@ export default function ClientDashboard() {
     : null;
 
   // Format payments for calendar
-  const formattedPayments = payments.map((payment: any) => ({
-    month: new Date(payment.createdAt).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-    status: payment.status === 'paid' ? 'paid' : payment.status === 'pending' ? 'pending' : 'overdue',
-    date: payment.status === 'paid' ? new Date(payment.createdAt).toLocaleDateString('pt-BR') : undefined,
-    amount: parseFloat(payment.amount).toFixed(2).replace('.', ','),
-  }));
+  const formattedPayments = payments.map((payment) => {
+    const paymentStatus: "paid" | "pending" | "overdue" = 
+      payment.status === 'paid' ? 'paid' : 
+      payment.status === 'pending' ? 'pending' : 
+      'overdue';
+    
+    return {
+      month: new Date(payment.createdAt).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+      status: paymentStatus,
+      date: payment.status === 'paid' ? new Date(payment.createdAt).toLocaleDateString('pt-BR') : undefined,
+      amount: parseFloat(payment.amount).toFixed(2).replace('.', ','),
+    };
+  });
 
   return (
     <div className="min-h-screen bg-background">
@@ -127,7 +138,7 @@ export default function ClientDashboard() {
 
       <main className="container mx-auto px-4 py-8 space-y-8 max-w-7xl">
         <PaymentStatusBanner
-          status={user?.status || "INATIVO"}
+          status={(user?.status === "ATIVO" || user?.status === "INATIVO") ? user.status : "INATIVO"}
           lastPayment={user?.ultimoPagamento ? new Date(user.ultimoPagamento).toLocaleDateString('pt-BR') : undefined}
           nextDue={user?.ultimoPagamento ? new Date(new Date(user.ultimoPagamento).setMonth(new Date(user.ultimoPagamento).getMonth() + 1)).toLocaleDateString('pt-BR') : undefined}
           onPayClick={handlePayClick}

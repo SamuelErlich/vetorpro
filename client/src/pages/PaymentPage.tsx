@@ -8,6 +8,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle, Copy, Loader2 } from "lucide-react";
 
+type PaymentStatusResponse = { 
+  status: string;
+  amount: string;
+  createdAt: string;
+};
+
 export default function PaymentPage() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -35,7 +41,7 @@ export default function PaymentPage() {
   });
 
   // Poll payment status every 3 seconds
-  const { data: paymentStatus } = useQuery({
+  const { data: paymentStatus } = useQuery<PaymentStatusResponse>({
     queryKey: ['/api/payments/status', pixData?.txid],
     enabled: !!pixData?.txid && !paymentConfirmed,
     refetchInterval: 3000,

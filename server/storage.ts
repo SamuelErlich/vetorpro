@@ -118,7 +118,9 @@ export class MemStorage implements IStorage {
   async createCredential(insertCredential: InsertCredential): Promise<Credential> {
     const id = randomUUID();
     const credential: Credential = { 
-      ...insertCredential, 
+      data: insertCredential.data,
+      month: insertCredential.month,
+      userId: insertCredential.userId ?? null,
       id 
     };
     this.credentials.set(id, credential);
