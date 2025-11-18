@@ -73,6 +73,7 @@ export default function ClientDashboard() {
     try {
       const data = JSON.parse(cred.data);
       return {
+        id: cred.id,
         month: cred.month,
         items: Object.entries(data).map(([key, value]) => ({
           label: key.charAt(0).toUpperCase() + key.slice(1),
@@ -81,15 +82,17 @@ export default function ClientDashboard() {
       };
     } catch {
       return {
+        id: cred.id,
         month: cred.month,
         items: [{ label: "Dados", value: cred.data }],
       };
     }
   });
 
-  // Get current month credentials
-  const currentMonth = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  const currentCreds = parsedCredentials[0] || { month: currentMonth, items: [] };
+  // Get only the most recent credential (last in array)
+  const currentCreds = parsedCredentials.length > 0 
+    ? parsedCredentials[parsedCredentials.length - 1]
+    : null;
 
   // Format payments for calendar
   const formattedPayments = payments.map((payment: any) => ({
@@ -132,11 +135,21 @@ export default function ClientDashboard() {
 
         {credentialsLoading ? (
           <Skeleton className="h-64 w-full" />
+        ) : isLocked ? (
+          <CredentialsCard
+            month=""
+            credentials={[]}
+            isLocked={true}
+          />
+        ) : !currentCreds ? (
+          <div className="text-center py-12 text-muted-foreground">
+            Nenhuma credencial disponível
+          </div>
         ) : (
           <CredentialsCard
             month={currentCreds.month}
             credentials={currentCreds.items}
-            isLocked={isLocked}
+            isLocked={false}
           />
         )}
 

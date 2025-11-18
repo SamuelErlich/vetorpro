@@ -4,9 +4,15 @@ import {
   type Credential,
   type InsertCredential,
   type Payment,
-  type InsertPayment
+  type InsertPayment,
+  users,
+  credentials,
+  payments
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
+import { eq, isNull, or } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -177,4 +183,106 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// PostgreSQL storage using Drizzle ORM
+class PostgresStorage implements IStorage {
+  private db: ReturnType<typeof drizzle>;
+
+  constructor() {
+    const sql = neon(process.env.DATABASE_URL!);
+    this.db = drizzle(sql);
+  }
+
+  // Users
+  async getUser(id: string): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.id, id));
+    return result[0];
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const result = await this.db.select().from(users).where(eq(users.email, email));
+    return result[0];
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await this.db.select().from(users);
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const result = await this.db.insert(users).values(insertUser).returning();
+    return result[0];
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const result = await this.db.update(users).set(updates).where(eq(users.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    const result = await this.db.delete(users).where(eq(users.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Credentials
+  async getCredential(id: string): Promise<Credential | undefined> {
+    const result = await this.db.select().from(credentials).where(eq(credentials.id, id));
+    return result[0];
+  }
+
+  async getCredentialsByUserId(userId: string): Promise<Credential[]> {
+    return await this.db.select().from(credentials).where(eq(credentials.userId, userId));
+  }
+
+  async getSharedCredentials(): Promise<Credential[]> {
+    return await this.db.select().from(credentials).where(isNull(credentials.userId));
+  }
+
+  async getAllCredentials(): Promise<Credential[]> {
+    return await this.db.select().from(credentials);
+  }
+
+  async createCredential(insertCredential: InsertCredential): Promise<Credential> {
+    const result = await this.db.insert(credentials).values(insertCredential).returning();
+    return result[0];
+  }
+
+  async updateCredential(id: string, updates: Partial<Credential>): Promise<Credential | undefined> {
+    const result = await this.db.update(credentials).set(updates).where(eq(credentials.id, id)).returning();
+    return result[0];
+  }
+
+  async deleteCredential(id: string): Promise<boolean> {
+    const result = await this.db.delete(credentials).where(eq(credentials.id, id)).returning();
+    return result.length > 0;
+  }
+
+  // Payments
+  async getPayment(id: string): Promise<Payment | undefined> {
+    const result = await this.db.select().from(payments).where(eq(payments.id, id));
+    return result[0];
+  }
+
+  async getPaymentsByUserId(userId: string): Promise<Payment[]> {
+    return await this.db.select().from(payments).where(eq(payments.userId, userId));
+  }
+
+  async getAllPayments(): Promise<Payment[]> {
+    return await this.db.select().from(payments);
+  }
+
+  async createPayment(insertPayment: InsertPayment): Promise<Payment> {
+    const result = await this.db.insert(payments).values(insertPayment).returning();
+    return result[0];
+  }
+
+  async updatePayment(id: string, updates: Partial<Payment>): Promise<Payment | undefined> {
+    const result = await this.db.update(payments).set(updates).where(eq(payments.id, id)).returning();
+    return result[0];
+  }
+
+  async getPaymentByTxid(txid: string): Promise<Payment | undefined> {
+    const result = await this.db.select().from(payments).where(eq(payments.txid, txid!));
+    return result[0];
+  }
+}
+
+export const storage = new PostgresStorage();
