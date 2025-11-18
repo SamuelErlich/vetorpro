@@ -88,7 +88,7 @@ async function sendPaymentPreReminderEmails() {
     for (const user of activeUsers) {
       // Check if user's payment is due day 5 of THIS month
       if (isPaymentDueThisMonth(user.nextPaymentDate)) {
-        const template = emailTemplates.paymentDueTomorrow(user.email.split('@')[0]);
+        const template = emailTemplates.paymentDueInTwoDays(user.email.split('@')[0]);
         const success = await sendEmail({
           to: user.email,
           subject: template.subject,
@@ -97,7 +97,7 @@ async function sendPaymentPreReminderEmails() {
 
         if (success) {
           sentCount++;
-          console.log(`   📧 Sent pre-reminder email to ${user.email} (payment due day 5)`);
+          console.log(`   📧 Sent pre-reminder email to ${user.email} (payment due in 2 days - day 5)`);
         } else {
           failedCount++;
         }
@@ -132,7 +132,7 @@ async function sendPaymentFinalWarningEmails() {
     for (const user of activeUsers) {
       // Check if user's payment is due day 5 of THIS month
       if (isPaymentDueThisMonth(user.nextPaymentDate)) {
-        const template = emailTemplates.paymentDueToday(user.email.split('@')[0]);
+        const template = emailTemplates.paymentDueTomorrow(user.email.split('@')[0]);
         const success = await sendEmail({
           to: user.email,
           subject: template.subject,

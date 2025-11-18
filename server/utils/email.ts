@@ -54,8 +54,55 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
 
 /**
  * Email templates for payment notifications
+ * All payments are due on DAY 5 of each month
  */
 export const emailTemplates = {
+  // Dia 3: Aviso prévio (vence em 2 dias)
+  paymentDueInTwoDays: (userName: string) => ({
+    subject: '💡 Lembrete: Sua mensalidade vence em 2 dias - VectorPro',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f0f9ff; padding: 30px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }
+            .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
+            .info { background: #dbeafe; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #3b82f6; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✨ VectorPro</h1>
+            </div>
+            <div class="content">
+              <h2>Olá${userName ? ' ' + userName : ''}!</h2>
+              <div class="info">
+                <strong>💡 Lembrete:</strong> Sua mensalidade vence <strong>em 2 dias (dia 5)</strong>.
+              </div>
+              <p>Este é um lembrete antecipado para que você possa se organizar e manter seu acesso ativo sem interrupções.</p>
+              <p><strong>Valor:</strong> R$ 17,50/mês</p>
+              <p>Você pode fazer o pagamento via PIX através do nosso sistema. É rápido e seu acesso será renovado automaticamente!</p>
+              <a href="${process.env.REPLIT_DEV_DOMAIN || 'https://vectorpro.replit.app'}" class="button">Acessar Sistema e Pagar</a>
+              <p style="margin-top: 20px; font-size: 14px; color: #6b7280;">
+                ✅ Após o pagamento, seu acesso será renovado automaticamente até o dia 5 do próximo mês.
+              </p>
+            </div>
+            <div class="footer">
+              <p>VectorPro - Gestão de Credenciais</p>
+              <p>Precisa de ajuda? Entre em contato via WhatsApp: +55 44 93618-4613</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  }),
+
   // Dia 4: Aviso de vencimento amanhã
   paymentDueTomorrow: (userName: string) => ({
     subject: '⚠️ Sua mensalidade vence amanhã - VectorPro',
@@ -85,7 +132,7 @@ export const emailTemplates = {
               <p><strong>Valor:</strong> R$ 17,50/mês</p>
               <a href="${process.env.REPLIT_DEV_DOMAIN || 'https://vectorpro.replit.app'}" class="button">Acessar Sistema e Pagar</a>
               <p style="margin-top: 20px; font-size: 14px; color: #6b7280;">
-                💡 Após o pagamento, seu acesso será renovado automaticamente por mais 30 dias.
+                ✅ Após o pagamento, seu acesso será renovado automaticamente até o dia 5 do próximo mês.
               </p>
             </div>
             <div class="footer">
