@@ -596,6 +596,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: Simulate payment (for testing)
+  app.post("/api/admin/simulate-payment", requireAdmin, async (req, res) => {
+    try {
+      const { userId, amount } = req.body;
+
+      if (!userId || !amount) {
+        return res.status(400).json({ 
+          error: "Missing required fields: userId and amount (in cents)" 
+        });
+      }
+
+      // Get user
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      // Create payment record with PAID status
+      const payment = await storage.createPayment({
+        userId,
+        amount: amount.toString(),
+        status: "paid",
+        txid: `SIMULATED-${Date.now()}`,
+      });
+
+      // Calculate nextPaymentDate: day 5 of NEXT month
+      const nextPaymentDate = new Date();
+      nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1); // Next month
+      nextPaymentDate.setDate(5); // Day 5
+      nextPaymentDate.setHours(0, 0, 0, 0); // Midnight
+
+      // Update user: set status to ATIVO, update ultimoPagamento and nextPaymentDate
+      await storage.updateUser(userId, {
+        status: "ATIVO",
+        ultimoPagamento: new Date(),
+        nextPaymentDate,
+      });
+
+      console.log(`✅ [SIMULATE-PAYMENT] User ${user.email} payment simulated. Next payment: ${nextPaymentDate.toISOString().split('T')[0]}`);
+
+      res.json({ 
+        success: true, 
+        message: `Payment simulated for user ${user.email}`,
+        payment,
+        nextPaymentDate: nextPaymentDate.toISOString(),
+      });
+    } catch (error) {
+      console.error("Simulate payment error:", error);
+      res.status(500).json({ error: "Erro ao simular pagamento" });
+    }
+  });
+
   // Admin: Manual trigger for cron jobs (testing)
   // All payments are due on DAY 5 of each month
   app.post("/api/admin/trigger-cron", requireAdmin, async (req, res) => {
