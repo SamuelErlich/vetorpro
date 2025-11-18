@@ -206,15 +206,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Update user password
+      // Get user to check current status
+      const user = await storage.getUser(reset.userId);
+      
+      // Update user password and status (PENDENTE → ATIVO when password is created)
       await storage.updateUser(reset.userId, {
         password: hashedPassword,
+        status: user?.status === "PENDENTE" ? "ATIVO" : user?.status,
       });
 
       // Delete all password reset tokens for this user
       await storage.deletePasswordResetsByUserId(reset.userId);
 
-      console.log(`✅ [CREATE-PASSWORD] Password created for user ${reset.userId}`);
+      console.log(`✅ [CREATE-PASSWORD] Password created for user ${reset.userId}${user?.status === "PENDENTE" ? " (status: PENDENTE → ATIVO)" : ""}`);
 
       res.json({ success: true, message: "Senha criada com sucesso! Você já pode fazer login." });
     } catch (error: any) {
@@ -251,8 +255,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email já cadastrado" });
       }
 
-      // Hash password
-      const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+      // Hash password if provided (password can be null for users created via email invitation)
+      const hashedPassword = validatedData.password 
+        ? await bcrypt.hash(validatedData.password, 10)
+        : null;
       
       const user = await storage.createUser({
         ...validatedData,
@@ -642,7 +648,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           break;
 
         case "today":
-          template = emailTemplates.paymentDueToday(email.split('@')[0]);
+          template = emailTemplates.paymentDueInTwoDays(email.split('@')[0]);
           success = await sendEmail({
             to: email,
             subject: template.subject,

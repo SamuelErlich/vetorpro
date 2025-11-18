@@ -15,7 +15,7 @@ import { Edit, Trash2, UserPlus } from "lucide-react";
 interface User {
   id: string;
   email: string;
-  status: "ATIVO" | "INATIVO";
+  status: "ATIVO" | "PENDENTE" | "INATIVO" | "BLOQUEADO";
   lastPayment?: string;
 }
 
@@ -55,8 +55,18 @@ export default function AdminUserTable({ users, onAdd, onEdit, onDelete }: Admin
                   <TableCell className="font-medium">{user.email}</TableCell>
                   <TableCell>
                     <Badge 
-                      variant={user.status === "ATIVO" ? "secondary" : "destructive"}
-                      className={user.status === "ATIVO" ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : ""}
+                      variant={
+                        user.status === "ATIVO" ? "secondary" : 
+                        user.status === "PENDENTE" ? "outline" : 
+                        "destructive"
+                      }
+                      className={
+                        user.status === "ATIVO" 
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                          : user.status === "PENDENTE"
+                          ? "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-300 dark:border-yellow-700"
+                          : ""
+                      }
                     >
                       {user.status}
                     </Badge>

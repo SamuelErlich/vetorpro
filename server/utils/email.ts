@@ -249,8 +249,9 @@ export const emailTemplates = {
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             .container { max-width: 600px; margin: 0 auto; padding: 20px; }
             .header { background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+            .logo { font-size: 48px; margin-bottom: 10px; }
             .content { background: #f0f9ff; padding: 30px; border-radius: 0 0 8px 8px; }
-            .button { display: inline-block; background: #3b82f6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; margin-top: 20px; font-weight: bold; }
+            .button { display: inline-block; background: #3b82f6; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 6px; margin-top: 20px; font-weight: bold; }
             .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
             .info-box { background: #dbeafe; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #3b82f6; }
             .warning-box { background: #fef3c7; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #f59e0b; }
@@ -259,7 +260,8 @@ export const emailTemplates = {
         <body>
           <div class="container">
             <div class="header">
-              <h1>🔐 VectorPro</h1>
+              <div class="logo">🔐</div>
+              <h1 style="margin: 10px 0;">VectorPro</h1>
               <p style="margin: 0; opacity: 0.95;">Bem-vindo ao Sistema!</p>
             </div>
             <div class="content">
@@ -278,7 +280,7 @@ export const emailTemplates = {
               </ol>
 
               <div style="text-align: center; margin: 30px 0;">
-                <a href="${process.env.REPLIT_DEV_DOMAIN || 'https://vectorpro.replit.app'}/criar-senha?token=${token}" class="button">
+                <a href="${process.env.REPLIT_DEV_DOMAIN || 'https://vectorpro.replit.app'}/criar-senha?token=${token}" class="button" style="color: #ffffff;">
                   ✨ Criar Minha Senha
                 </a>
               </div>
@@ -292,8 +294,8 @@ export const emailTemplates = {
               </p>
             </div>
             <div class="footer">
-              <p>VectorPro - Gestão de Credenciais</p>
-              <p>Precisa de ajuda? Entre em contato via WhatsApp: +55 44 93618-4613</p>
+              <p><strong>VectorPro</strong> - Gestão de Credenciais</p>
+              <p>Precisa de ajuda? Entre em contato via WhatsApp: <strong>+55 44 93618-4613</strong></p>
               <p style="font-size: 12px; color: #9ca3af; margin-top: 15px;">
                 Este email foi enviado automaticamente. Por favor, não responda.
               </p>
