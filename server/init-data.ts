@@ -59,10 +59,10 @@ export async function initializeData() {
     });
     console.log("✓ Sample shared credentials created");
 
-    // Create sample payment (amount in cents: 9990 = R$99.90)
+    // Create sample payment (amount in cents as string: "9990" = R$99.90)
     await storage.createPayment({
       userId: client.id,
-      amount: 9990, // Amount in cents for precise monetary math
+      amount: "9990", // Amount in cents as string for decimal column
       status: "paid",
       txid: "SAMPLE_TXN_123",
     });

@@ -158,7 +158,7 @@ Preferred communication style: Simple, everyday language.
 - **Status Handling**: Accepts "paid", "pago", "confirmed" (case-insensitive)
 - **Idempotency**: Checks if payment already processed before updating
 - **User Activation**: Updates user.status to "ATIVO" and sets ultimoPagamento timestamp
-- **Amount Storage**: All amounts stored as INTEGER centavos for precise monetary math (no float drift)
+- **Amount Storage**: Amounts stored as centavos (cents) in decimal column as string (e.g., "1750" = R$17.50) for precise monetary math
 
 **UI Enhancements**:
 - Payment banner displays monthly subscription value (R$ 17,50) with CreditCard icon

@@ -340,14 +340,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Format cents to reais for UI display
-      const amountInReais = typeof payment.amount === 'number' 
-        ? (payment.amount / 100).toFixed(2)
-        : payment.amount;
+      // payment.amount is stored as cents in string format (e.g., "1750")
+      const amountCents = parseInt(payment.amount as string, 10);
+      const amountInReais = (amountCents / 100).toFixed(2);
 
       res.json({ 
         status: payment.status,
-        amount: amountInReais, // Return formatted reais for UI
-        amountCents: payment.amount, // Also return raw cents
+        amount: amountInReais, // Return formatted reais for UI (e.g., "17.50")
+        amountCents: amountCents, // Return raw cents (e.g., 1750)
         createdAt: payment.createdAt,
       });
     } catch (error) {
@@ -472,10 +472,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Create payment record with OUR transaction ID (amount in cents)
+      // Create payment record with OUR transaction ID (amount in cents as string)
       const payment = await storage.createPayment({
         userId: req.session.userId!,
-        amount: amountInCents, // Store cents as integer for precise monetary math
+        amount: amountInCents.toString(), // Store cents as string (decimal column)
         status: "pending",
         txid: ourTxid, // CRITICAL: Use our own TXID
       });

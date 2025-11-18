@@ -157,9 +157,10 @@ export class MemStorage implements IStorage {
 
   async createPayment(insertPayment: InsertPayment): Promise<Payment> {
     const id = randomUUID();
+    // amount is always string (cents as string like "1750") per InsertPayment type
     const payment: Payment = { 
       userId: insertPayment.userId,
-      amount: insertPayment.amount,
+      amount: insertPayment.amount, // Already string from schema
       status: insertPayment.status || "pending",
       txid: insertPayment.txid || null,
       id,

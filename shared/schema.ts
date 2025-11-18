@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -22,7 +22,7 @@ export const credentials = pgTable("credentials", {
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  amount: integer("amount").notNull(), // Amount in cents (centavos) for precise monetary math
+  amount: decimal("amount", { precision: 10, scale: 0 }).notNull(), // Amount in cents as decimal string (e.g., "1750")
   status: text("status").notNull().default("pending"),
   txid: text("txid"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
@@ -37,9 +37,12 @@ export const insertCredentialSchema = createInsertSchema(credentials).omit({
   id: true,
 });
 
+// Payment schema with amount as string (decimal column returns string)
 export const insertPaymentSchema = createInsertSchema(payments).omit({
   id: true,
   createdAt: true,
+}).extend({
+  amount: z.string(), // Override to explicitly accept string (cents as string)
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
