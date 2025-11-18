@@ -126,10 +126,25 @@ Preferred communication style: Simple, everyday language.
 ### Third-Party APIs
 
 **PushinPay API**: PIX payment generation service
-- Endpoint: POST https://api.pushinpay.com.br/pix
-- Parameters: valor (amount), chave_pix (PIX key), txid (transaction ID)
-- Returns: QR code image URL and payment string
-- Webhook for payment confirmation
+- **Production Endpoint**: POST https://api.pushinpay.com.br/api/pix/cashIn
+- **Sandbox Endpoint**: POST https://api-sandbox.pushinpay.com.br/api/pix/cashIn
+- **Authentication**: Authorization header with token (format: `54639|MadF7cQylFYos8sV1pPAevPjztPGwIBIqYxUaxsz7e7ee90a`)
+- **Account ID**: `9F0D8FDB-A19B-4C47-9F6C-968FECC0D2A1` (used for split_rules if needed)
+- **Request Parameters**:
+  - `value` (required): Payment amount in cents (e.g., 3500 = R$35.00)
+  - `webhook_url` (optional): URL to receive payment status updates
+  - `split_rules` (optional): Array for revenue sharing between accounts
+- **Response Fields**:
+  - `id`: Transaction UUID
+  - `qr_code`: PIX "Copia e Cola" copy-paste string
+  - `qr_code_base64`: Base64-encoded QR code image (data:image/png;base64,...)
+  - `status`: Transaction status (created, paid, failed)
+  - `value`: Amount in cents
+- **Webhook**: Automatic POST to webhook_url on payment status change (3 retry attempts)
+- **Environment Variables**:
+  - `PUSHINPAY_TOKEN`: API authentication token
+  - `PUSHINPAY_ACCOUNT_ID`: Account identifier
+  - `PUSHINPAY_PIX_KEY`: PIX key for receiving payments
 
 ### Database Services
 
