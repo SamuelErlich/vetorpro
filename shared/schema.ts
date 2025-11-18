@@ -14,7 +14,7 @@ export const users = pgTable("users", {
 
 export const credentials = pgTable("credentials", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id),
+  userId: varchar("user_id").references(() => users.id),
   month: text("month").notNull(),
   data: text("data").notNull(),
 });

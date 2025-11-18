@@ -20,6 +20,7 @@ export interface IStorage {
   // Credentials
   getCredential(id: string): Promise<Credential | undefined>;
   getCredentialsByUserId(userId: string): Promise<Credential[]>;
+  getSharedCredentials(): Promise<Credential[]>;
   getAllCredentials(): Promise<Credential[]>;
   createCredential(credential: InsertCredential): Promise<Credential>;
   updateCredential(id: string, credential: Partial<Credential>): Promise<Credential | undefined>;
@@ -95,6 +96,12 @@ export class MemStorage implements IStorage {
   async getCredentialsByUserId(userId: string): Promise<Credential[]> {
     return Array.from(this.credentials.values()).filter(
       (cred) => cred.userId === userId,
+    );
+  }
+
+  async getSharedCredentials(): Promise<Credential[]> {
+    return Array.from(this.credentials.values()).filter(
+      (cred) => cred.userId === null || cred.userId === undefined,
     );
   }
 

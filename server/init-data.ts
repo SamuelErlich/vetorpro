@@ -33,19 +33,31 @@ export async function initializeData() {
     });
     console.log("✓ Client user created: cliente@example.com / cliente123");
 
-    // Create sample credentials for client
-    const credentialData = {
-      usuario: "user@service.com",
-      senha: "SenhaSegura@123",
-      chaveAPI: "sk_live_abc123xyz789",
+    // Create sample shared credentials (available to all active users)
+    const credentialDataJan = {
+      usuario: "vectorizer@service.com",
+      senha: "Vectorizer@2025",
+      chaveAPI: "vk_live_abc123xyz789",
     };
 
     await storage.createCredential({
-      userId: client.id,
+      userId: null,
       month: "Janeiro 2025",
-      data: JSON.stringify(credentialData),
+      data: JSON.stringify(credentialDataJan),
     });
-    console.log("✓ Sample credentials created");
+    
+    const credentialDataFev = {
+      usuario: "vectorizer@service.com",
+      senha: "Vectorizer@Feb2025",
+      chaveAPI: "vk_live_feb456def123",
+    };
+
+    await storage.createCredential({
+      userId: null,
+      month: "Fevereiro 2025",
+      data: JSON.stringify(credentialDataFev),
+    });
+    console.log("✓ Sample shared credentials created");
 
     // Create sample payment
     await storage.createPayment({

@@ -212,13 +212,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         return res.status(404).json({ error: "Usuário não encontrado" });
       }
-
-      const credentials = await storage.getCredentialsByUserId(user.id);
       
       // Return credentials only if user status is ATIVO
       if (user.status !== "ATIVO") {
         return res.json({ locked: true, credentials: [] });
       }
+
+      // Get shared credentials (userId is null) - available to all active users
+      const credentials = await storage.getSharedCredentials();
 
       res.json({ locked: false, credentials });
     } catch (error) {

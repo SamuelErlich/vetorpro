@@ -45,17 +45,14 @@ export default function CredentialFormDialog({
   users,
   credential 
 }: CredentialFormDialogProps) {
-  const [userId, setUserId] = useState(credential?.userId || "");
   const [month, setMonth] = useState(credential?.month || "");
   const [data, setData] = useState(credential?.data || "");
 
   useEffect(() => {
     if (credential) {
-      setUserId(credential.userId);
       setMonth(credential.month);
       setData(credential.data);
     } else {
-      setUserId("");
       setMonth("");
       setData("");
     }
@@ -63,7 +60,7 @@ export default function CredentialFormDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ userId, month, data });
+    onSubmit({ userId: null, month, data });
     onClose();
   };
 
@@ -76,28 +73,12 @@ export default function CredentialFormDialog({
           </DialogTitle>
           <DialogDescription>
             {credential 
-              ? "Atualize as informações da credencial" 
-              : "Adicione uma nova credencial para o usuário"}
+              ? "Atualize as informações da credencial compartilhada" 
+              : "Adicione uma nova credencial compartilhada. Todos os usuários com pagamento ativo poderão visualizar."}
           </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="userId">Usuário</Label>
-            <Select value={userId} onValueChange={setUserId} required>
-              <SelectTrigger id="userId" data-testid="select-credential-user">
-                <SelectValue placeholder="Selecione um usuário" />
-              </SelectTrigger>
-              <SelectContent>
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.email}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           <div className="space-y-2">
             <Label htmlFor="month">Mês/Período</Label>
             <Input
