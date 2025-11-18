@@ -351,44 +351,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Valor inválido" });
       }
 
-      // Call PushinPay API to generate PIX first
-      const pushinpayToken = process.env.PUSHINPAY_TOKEN;
-      const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`
-        : undefined;
+      // Check if demo mode is enabled
+      const useDemoMode = process.env.USE_PUSHINPAY_DEMO === "true";
+      
+      let pixData: any;
+      
+      if (useDemoMode) {
+        // DEMO MODE: Generate fake PIX for testing
+        console.log(`[DEMO MODE] Generating fake PIX for R$${amount}`);
+        
+        const demoTxid = `DEMO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Generate a simple demo QR code (base64 encoded 1x1 pixel)
+        const demoQrCodeBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        
+        pixData = {
+          id: demoTxid,
+          qr_code: "00020101021126580014br.gov.bcb.pix0136demo-pix-code-for-testing-only5204000053039865802BR5925DEMO PUSHINPAY TESTING6009SAO PAULO62070503***6304ABCD",
+          qr_code_base64: demoQrCodeBase64,
+          status: "created",
+          value: Math.round(amount * 100)
+        };
+        
+        console.log(`[DEMO MODE] Created demo payment with txid: ${demoTxid}`);
+      } else {
+        // PRODUCTION MODE: Call real PushinPay API
+        const pushinpayToken = process.env.PUSHINPAY_TOKEN;
+        const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
+          ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`
+          : undefined;
 
-      if (!pushinpayToken) {
-        console.error("PUSHINPAY_TOKEN not configured");
-        return res.status(500).json({ error: "Configuração de pagamento não encontrada" });
+        if (!pushinpayToken) {
+          console.error("PUSHINPAY_TOKEN not configured");
+          return res.status(500).json({ error: "Configuração de pagamento não encontrada" });
+        }
+
+        // Convert amount to cents (R$35.00 = 3500)
+        const amountInCents = Math.round(amount * 100);
+
+        console.log(`Generating PIX for R$${amount} (${amountInCents} cents)`);
+
+        const pushinpayResponse = await fetch("https://api.pushinpay.com.br/api/pix/cashIn", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${pushinpayToken}`,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            value: amountInCents,
+            webhook_url: webhookUrl,
+          }),
+        });
+
+        if (!pushinpayResponse.ok) {
+          const errorText = await pushinpayResponse.text();
+          console.error("PushinPay API error:", pushinpayResponse.status, errorText);
+          
+          // Try to parse error message
+          let errorMessage = "Erro ao gerar PIX. Tente novamente.";
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.error) {
+              errorMessage = `PushinPay: ${errorJson.error}`;
+            }
+            if (errorJson.codex) {
+              errorMessage += ` (${errorJson.codex})`;
+            }
+          } catch (e) {
+            // Keep default error message
+          }
+          
+          return res.status(pushinpayResponse.status).json({ error: errorMessage });
+        }
+
+        pixData = await pushinpayResponse.json();
+        console.log("PushinPay response:", { id: pixData.id, status: pixData.status });
       }
 
-      // Convert amount to cents (R$35.00 = 3500)
-      const amountInCents = Math.round(amount * 100);
-
-      console.log(`Generating PIX for R$${amount} (${amountInCents} cents)`);
-
-      const pushinpayResponse = await fetch("https://api.pushinpay.com.br/api/pix/cashIn", {
-        method: "POST",
-        headers: {
-          "Authorization": pushinpayToken,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          value: amountInCents,
-          webhook_url: webhookUrl,
-        }),
-      });
-
-      if (!pushinpayResponse.ok) {
-        const errorText = await pushinpayResponse.text();
-        console.error("PushinPay API error:", pushinpayResponse.status, errorText);
-        return res.status(500).json({ error: "Erro ao gerar PIX. Tente novamente." });
-      }
-
-      const pixData = await pushinpayResponse.json();
-      console.log("PushinPay response:", { id: pixData.id, status: pixData.status });
-
-      // Create payment record with PushinPay transaction ID
+      // Create payment record with transaction ID
       const payment = await storage.createPayment({
         userId: req.session.userId!,
         amount: amount.toString(),
