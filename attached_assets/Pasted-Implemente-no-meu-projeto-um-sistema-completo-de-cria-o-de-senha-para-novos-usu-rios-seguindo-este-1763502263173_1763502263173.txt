@@ -1,0 +1,62 @@
+Implemente no meu projeto um sistema completo de criação de senha para novos usuários, seguindo este fluxo:
+
+1) No painel admin, ao criar um usuário novo, eu quero informar APENAS o email e o status. Não quero definir senha manualmente. O sistema deverá enviar automaticamente um email para o usuário criar a própria senha.
+
+2) Crie no backend uma tabela "password_resets" com:
+- id (uuid)
+- userId
+- token (string)
+- expiresAt (datetime)
+
+3) Crie uma rota POST /api/admin/users/create-and-send-email
+Essa rota recebe somente:
+{
+  "email": "email-do-cliente",
+  "status": "ATIVO" ou "PENDENTE"
+}
+A rota deve:
+- criar o usuário no banco com password = null
+- gerar um token seguro com crypto.randomBytes(32).toString("hex")
+- salvar em "password_resets" com validade de 24 horas
+- enviar email usando Resend com link:
+  https://MEU_DOMINIO/criar-senha?token=TOKEN
+- retornar { success: true }
+
+4) Crie uma rota POST /api/auth/create-password
+Recebe:
+{
+  "token": "token recebido",
+  "password": "nova senha"
+}
+Processo:
+- validar se o token existe em password_resets
+- validar se não expirou
+- buscar o userId associado
+- fazer bcrypt.hash da nova senha
+- salvar no usuário
+- apagar o token da tabela password_resets
+- retornar { success: true }
+
+5) Crie uma rota GET /api/auth/validate-token/:token
+Essa rota deve validar se o token existe e não expirou. Se estiver tudo ok, retorna { valid: true }, senão { valid: false }. Isso é necessário para o frontend renderizar a página de criação de senha.
+
+6) Crie a página EJS /views/create-password.ejs com:
+- campo "nova senha"
+- campo "confirmar senha"
+- botão enviar
+- script para chamar POST /api/auth/create-password
+
+7) Atualize o painel admin adicionando um botão "Criar usuário e enviar acesso" que chama a rota /api/admin/users/create-and-send-email.
+
+8) No util de emails (usar Resend), crie a função sendCreatePasswordEmail(email, token) com HTML claro contendo:
+"Crie sua senha no link abaixo"
++ link completo
+
+9) O sistema deve permitir login normalmente após o usuário criar a senha. Caso ele tente logar antes de criar senha, retornar erro "Senha não definida. Verifique seu email para criar sua senha."
+
+10) Ajuste o GET /api/auth/login para:
+- se password == null → mostrar erro informando que a conta está criada mas a senha não foi definida ainda
+
+11) Código deve ser limpo, organizado e consistente com a estrutura atual do projeto.
+
+Implemente tudo isso agora, atualizando os arquivos necessários.

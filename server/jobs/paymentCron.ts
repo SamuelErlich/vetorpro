@@ -5,13 +5,13 @@ import { sendEmail, emailTemplates } from '../utils/email';
 /**
  * Payment Monitoring Cron Jobs
  * 
- * Automatically sends email notifications about payment due dates
- * and blocks users who haven't paid by day 6.
+ * ALL PAYMENTS ARE DUE ON DAY 5 OF EACH MONTH (standardized billing cycle)
+ * Automatically sends email notifications and blocks overdue users.
  * 
- * Schedule (Brazilian timezone):
- * - Day 4 at 9:00 AM: "Your payment is due tomorrow"
- * - Day 5 at 9:00 AM: "Your payment is due today"
- * - Day 6 at 9:00 AM: Block user and send "Access blocked"
+ * Schedule (Brazilian timezone - America/Sao_Paulo):
+ * - Day 3 at 9:00 AM: "Your payment is due in 2 days" (pre-reminder)
+ * - Day 4 at 9:00 AM: "Your payment is due tomorrow" (final warning)
+ * - Day 6 at 9:00 AM: Block overdue users + send "Access blocked" (1 day grace period)
  */
 
 /**
@@ -33,40 +33,27 @@ function toDate(value: Date | string | null | undefined): Date | null {
 }
 
 /**
- * Check if payment is due tomorrow (nextPaymentDate is tomorrow)
+ * Check if user's payment is due THIS MONTH (day 5 of current month)
+ * Used for day 3 and day 4 reminders
  */
-function isPaymentDueTomorrow(nextPaymentDate: Date | string | null | undefined): boolean {
-  const paymentDate = toDate(nextPaymentDate);
-  if (!paymentDate) return false;
-  
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0); // Start of day
-  
-  const payment = new Date(paymentDate);
-  payment.setHours(0, 0, 0, 0); // Start of day
-  
-  return payment.getTime() === tomorrow.getTime();
-}
-
-/**
- * Check if payment is due today (nextPaymentDate is today)
- */
-function isPaymentDueToday(nextPaymentDate: Date | string | null | undefined): boolean {
+function isPaymentDueThisMonth(nextPaymentDate: Date | string | null | undefined): boolean {
   const paymentDate = toDate(nextPaymentDate);
   if (!paymentDate) return false;
   
   const today = new Date();
-  today.setHours(0, 0, 0, 0); // Start of day
-  
   const payment = new Date(paymentDate);
-  payment.setHours(0, 0, 0, 0); // Start of day
   
-  return payment.getTime() === today.getTime();
+  // Check if nextPaymentDate is day 5 of the CURRENT month/year
+  return (
+    payment.getFullYear() === today.getFullYear() &&
+    payment.getMonth() === today.getMonth() &&
+    payment.getDate() === 5
+  );
 }
 
 /**
  * Check if payment is overdue (nextPaymentDate is in the past)
+ * Used for day 6 blocking
  */
 function isPaymentOverdue(nextPaymentDate: Date | string | null | undefined): boolean {
   const paymentDate = toDate(nextPaymentDate);
@@ -82,11 +69,11 @@ function isPaymentOverdue(nextPaymentDate: Date | string | null | undefined): bo
 }
 
 /**
- * DAY 4 at 9:00 AM - Send "Payment due tomorrow" email
- * Checks EACH user's individual nextPaymentDate
+ * DAY 3 at 9:00 AM - Send "Payment due in 2 days" email (pre-reminder)
+ * All payments due on day 5, so this runs on day 3
  */
-async function sendPaymentDueTomorrowEmails() {
-  console.log('🔔 [CRON] Running payment due tomorrow check...');
+async function sendPaymentPreReminderEmails() {
+  console.log('🔔 [CRON] Running payment pre-reminder check (Day 3 - due in 2 days)...');
   
   try {
     const users = await storage.getAllUsers();
@@ -99,8 +86,8 @@ async function sendPaymentDueTomorrowEmails() {
     let skippedCount = 0;
 
     for (const user of activeUsers) {
-      // Check if user's individual nextPaymentDate is tomorrow
-      if (isPaymentDueTomorrow(user.nextPaymentDate)) {
+      // Check if user's payment is due day 5 of THIS month
+      if (isPaymentDueThisMonth(user.nextPaymentDate)) {
         const template = emailTemplates.paymentDueTomorrow(user.email.split('@')[0]);
         const success = await sendEmail({
           to: user.email,
@@ -110,7 +97,7 @@ async function sendPaymentDueTomorrowEmails() {
 
         if (success) {
           sentCount++;
-          console.log(`   📧 Sent "due tomorrow" email to ${user.email}`);
+          console.log(`   📧 Sent pre-reminder email to ${user.email} (payment due day 5)`);
         } else {
           failedCount++;
         }
@@ -119,18 +106,18 @@ async function sendPaymentDueTomorrowEmails() {
       }
     }
 
-    console.log(`✅ [CRON] Payment due tomorrow emails completed: ${sentCount} sent, ${failedCount} failed, ${skippedCount} skipped (not due tomorrow)`);
+    console.log(`✅ [CRON] Payment pre-reminder emails completed: ${sentCount} sent, ${failedCount} failed, ${skippedCount} skipped`);
   } catch (error) {
-    console.error('❌ [CRON ERROR] Payment due tomorrow check failed:', error);
+    console.error('❌ [CRON ERROR] Payment pre-reminder check failed:', error);
   }
 }
 
 /**
- * DAY 5 at 9:00 AM - Send "Payment due today" email
- * Checks EACH user's individual nextPaymentDate
+ * DAY 4 at 9:00 AM - Send "Payment due tomorrow" email (final warning)
+ * All payments due on day 5, so this runs on day 4
  */
-async function sendPaymentDueTodayEmails() {
-  console.log('🔔 [CRON] Running payment due today check...');
+async function sendPaymentFinalWarningEmails() {
+  console.log('🔔 [CRON] Running payment final warning check (Day 4 - due tomorrow)...');
   
   try {
     const users = await storage.getAllUsers();
@@ -143,8 +130,8 @@ async function sendPaymentDueTodayEmails() {
     let skippedCount = 0;
 
     for (const user of activeUsers) {
-      // Check if user's individual nextPaymentDate is today
-      if (isPaymentDueToday(user.nextPaymentDate)) {
+      // Check if user's payment is due day 5 of THIS month
+      if (isPaymentDueThisMonth(user.nextPaymentDate)) {
         const template = emailTemplates.paymentDueToday(user.email.split('@')[0]);
         const success = await sendEmail({
           to: user.email,
@@ -154,7 +141,7 @@ async function sendPaymentDueTodayEmails() {
 
         if (success) {
           sentCount++;
-          console.log(`   📧 Sent "due today" email to ${user.email}`);
+          console.log(`   📧 Sent final warning email to ${user.email} (payment due tomorrow - day 5)`);
         } else {
           failedCount++;
         }
@@ -163,15 +150,15 @@ async function sendPaymentDueTodayEmails() {
       }
     }
 
-    console.log(`✅ [CRON] Payment due today emails completed: ${sentCount} sent, ${failedCount} failed, ${skippedCount} skipped (not due today)`);
+    console.log(`✅ [CRON] Payment final warning emails completed: ${sentCount} sent, ${failedCount} failed, ${skippedCount} skipped`);
   } catch (error) {
-    console.error('❌ [CRON ERROR] Payment due today check failed:', error);
+    console.error('❌ [CRON ERROR] Payment final warning check failed:', error);
   }
 }
 
 /**
  * DAY 6 at 9:00 AM - Block users and send "Access blocked" email
- * Checks EACH user's individual nextPaymentDate
+ * Blocks users whose payment is overdue (nextPaymentDate < today)
  */
 async function blockOverdueUsers() {
   console.log('🔔 [CRON] Running overdue payment check...');
@@ -230,25 +217,27 @@ async function blockOverdueUsers() {
 
 /**
  * Initialize all payment monitoring cron jobs
+ * All payments due on DAY 5 of each month
  * Safe to call even if cron environment is not ideal
  */
 export function initializePaymentCron() {
   console.log('⏰ [CRON] Initializing payment monitoring cron jobs...');
+  console.log('   📅 All payments are due on DAY 5 of each month');
   
   try {
-    // DAY 4 at 9:00 AM - Payment due tomorrow
-    cron.schedule('0 9 4 * *', sendPaymentDueTomorrowEmails, {
+    // DAY 3 at 9:00 AM - Payment due in 2 days (pre-reminder)
+    cron.schedule('0 9 3 * *', sendPaymentPreReminderEmails, {
       timezone: 'America/Sao_Paulo',
     });
-    console.log('   ✅ Scheduled: Day 4, 9:00 AM - Payment due tomorrow emails');
+    console.log('   ✅ Scheduled: Day 3, 9:00 AM - Pre-reminder emails (payment due in 2 days)');
 
-    // DAY 5 at 9:00 AM - Payment due today
-    cron.schedule('0 9 5 * *', sendPaymentDueTodayEmails, {
+    // DAY 4 at 9:00 AM - Payment due tomorrow (final warning)
+    cron.schedule('0 9 4 * *', sendPaymentFinalWarningEmails, {
       timezone: 'America/Sao_Paulo',
     });
-    console.log('   ✅ Scheduled: Day 5, 9:00 AM - Payment due today emails');
+    console.log('   ✅ Scheduled: Day 4, 9:00 AM - Final warning emails (payment due tomorrow)');
 
-    // DAY 6 at 9:00 AM - Block overdue users
+    // DAY 6 at 9:00 AM - Block overdue users (1 day grace period after day 5)
     cron.schedule('0 9 6 * *', blockOverdueUsers, {
       timezone: 'America/Sao_Paulo',
     });
@@ -268,7 +257,7 @@ export function initializePaymentCron() {
  * (Can be called from API endpoints)
  */
 export const manualTriggers = {
-  sendPaymentDueTomorrowEmails,
-  sendPaymentDueTodayEmails,
+  sendPaymentPreReminderEmails,
+  sendPaymentFinalWarningEmails,
   blockOverdueUsers,
 };

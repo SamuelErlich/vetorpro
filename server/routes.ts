@@ -597,44 +597,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin: Manual trigger for cron jobs (testing)
+  // All payments are due on DAY 5 of each month
   app.post("/api/admin/trigger-cron", requireAdmin, async (req, res) => {
     try {
       const { action } = req.body;
 
       if (!action) {
         return res.status(400).json({ 
-          error: "Missing required field: action (tomorrow|today|block)" 
+          error: "Missing required field: action (day3|day4|day6)" 
         });
       }
 
       let result;
       
       switch (action) {
-        case "tomorrow":
-          await manualTriggers.sendPaymentDueTomorrowEmails();
-          result = "Payment due tomorrow emails triggered";
+        case "day3":
+        case "pre-reminder":
+          await manualTriggers.sendPaymentPreReminderEmails();
+          result = "Day 3: Pre-reminder emails triggered (payment due in 2 days)";
           break;
 
-        case "today":
-          await manualTriggers.sendPaymentDueTodayEmails();
-          result = "Payment due today emails triggered";
+        case "day4":
+        case "final-warning":
+          await manualTriggers.sendPaymentFinalWarningEmails();
+          result = "Day 4: Final warning emails triggered (payment due tomorrow - day 5)";
           break;
 
+        case "day6":
         case "block":
           await manualTriggers.blockOverdueUsers();
-          result = "Block overdue users triggered";
+          result = "Day 6: Block overdue users triggered";
           break;
 
         default:
           return res.status(400).json({ 
-            error: "Invalid action. Must be: tomorrow, today, or block" 
+            error: "Invalid action. Must be: day3, day4, or day6 (or: pre-reminder, final-warning, block)" 
           });
       }
 
       res.json({ 
         success: true, 
         message: result,
-        note: "Check server logs for detailed execution results"
+        note: "Check server logs for detailed execution results. All payments are due on DAY 5 of each month."
       });
     } catch (error) {
       console.error("Manual cron trigger error:", error);
@@ -736,18 +740,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update payment status
         await storage.updatePayment(payment.id, { status: "paid" });
         
-        // Calculate next payment date (30 days from now)
+        // Calculate next payment date: Always day 5 of next month
         const nextPaymentDate = new Date();
-        nextPaymentDate.setDate(nextPaymentDate.getDate() + 30);
+        nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1); // Next month
+        nextPaymentDate.setDate(5); // Day 5
+        nextPaymentDate.setHours(0, 0, 0, 0); // Start of day
         
         // Update user status, payment date, and next payment date
         await storage.updateUser(payment.userId, {
           status: "ATIVO",
           ultimoPagamento: new Date(),
-          nextPaymentDate: nextPaymentDate, // Set next vencimento (30 days)
+          nextPaymentDate: nextPaymentDate, // Set next vencimento (day 5 of next month)
         });
         
-        console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]})`);
+        console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]} - day 5 of next month)`);
         
         res.json({ success: true, message: "Payment processed" });
       } else if (normalizedStatus === "canceled" || normalizedStatus === "cancelled" || normalizedStatus === "failed") {
