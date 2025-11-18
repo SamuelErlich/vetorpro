@@ -4,13 +4,16 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import LoginForm from "@/components/LoginForm";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import type { User as UserType } from "@shared/schema";
+
+type AuthMeResponse = { user: UserType };
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
   // Check if already logged in
-  const { data: userData } = useQuery({
+  const { data: userData } = useQuery<AuthMeResponse>({
     queryKey: ['/api/auth/me'],
     retry: false,
   });

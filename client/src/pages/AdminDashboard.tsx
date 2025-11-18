@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
@@ -23,6 +23,10 @@ import CredentialFormDialog from "@/components/CredentialFormDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { User as UserType, Credential, Payment } from "@shared/schema";
+
+type AuthMeResponse = { user: UserType };
+type PaymentWithUser = Payment & { userEmail: string };
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
@@ -33,17 +37,33 @@ export default function AdminDashboard() {
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editingCredential, setEditingCredential] = useState<any>(null);
 
+  // Check authentication
+  const { data: currentUser, isLoading: authLoading } = useQuery<AuthMeResponse>({
+    queryKey: ['/api/auth/me'],
+    retry: false,
+  });
+
+  // Redirect if not authenticated or not admin
+  useEffect(() => {
+    if (!authLoading && (!currentUser?.user || currentUser.user.isAdmin !== "true")) {
+      setLocation('/admin/login');
+    }
+  }, [currentUser, authLoading, setLocation]);
+
   // Fetch data
-  const { data: usersData, isLoading: usersLoading } = useQuery({
+  const { data: usersData, isLoading: usersLoading } = useQuery<UserType[]>({
     queryKey: ['/api/users'],
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
-  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
+  const { data: paymentsData, isLoading: paymentsLoading } = useQuery<PaymentWithUser[]>({
     queryKey: ['/api/admin/payments'],
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
-  const { data: credentialsData, isLoading: credentialsLoading } = useQuery({
+  const { data: credentialsData, isLoading: credentialsLoading } = useQuery<Credential[]>({
     queryKey: ['/api/admin/credentials'],
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
   // Mutations
