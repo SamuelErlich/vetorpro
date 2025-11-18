@@ -2,7 +2,7 @@
 
 ## Overview
 
-A web application for managing user credentials and payment processing. The system provides two distinct interfaces: a client portal where users can access their monthly credentials and manage payments, and an admin dashboard for managing users, credentials, and monitoring payments. Built with React, Express, and PostgreSQL, the application uses session-based authentication and integrates with the PushinPay API for PIX payment generation.
+This project is a web application designed for comprehensive user credential management and payment processing. It features a client portal for users to access monthly credentials and manage payments, and an admin dashboard for full control over users, credentials, and payment monitoring. The system is built with React, Express, and PostgreSQL, leveraging session-based authentication and integrating with the PushinPay API for PIX payment generation. The business vision is to provide a reliable and secure platform for managing access and subscriptions, with market potential in services requiring recurring payments and credential distribution. The ambition is to offer a seamless and automated experience for both users and administrators.
 
 ## User Preferences
 
@@ -10,238 +10,58 @@ Preferred communication style: Simple, everyday language.
 
 ## System Architecture
 
-### Frontend Architecture
+### Frontend
 
-**Framework**: React with TypeScript, using Vite as the build tool
+The frontend is built with **React** and **TypeScript** using **Vite** as the build tool. **Wouter** handles client-side routing. **TanStack Query** manages server state, while UI components are provided by **shadcn/ui** (based on Radix UI) with **Tailwind CSS** for styling, adhering to a Material Design aesthetic with Fluent Design influences and a "New York" style variant. A custom color system with CSS variables supports light/dark modes. WhatsApp contact buttons are context-aware and integrated across various pages.
 
-**Routing**: Wouter for client-side routing with the following structure:
-- `/` - Client login page (with WhatsApp contact button)
-- `/dashboard` - Client dashboard (protected, with WhatsApp support button)
-- `/admin/login` - Admin login page
-- `/admin` - Admin dashboard (protected)
-- `/payment` - PIX payment generation page
+### Backend
 
-**WhatsApp Integration**: Context-aware contact buttons
-- Login page button (inside card): "Preciso de acesso ao vectorizer"
-- Login page forgot password link: "Esqueci meu acesso e desejo alterar"
-- Dashboard (authenticated): "Preciso de ajuda com meu acesso"
-- Contact number: +55 44 93618-4613
-- Positioning: WhatsApp button integrated into login form below "Esqueceu sua senha?" link
-
-**State Management**: TanStack Query (React Query) for server state management with custom query client configuration. Session data is managed server-side with cookies.
-
-**UI Components**: shadcn/ui component library based on Radix UI primitives, configured with:
-- Tailwind CSS for styling with custom design tokens
-- Material Design with Fluent Design influences (per design guidelines)
-- "New York" style variant
-- Custom color system using CSS variables for light/dark mode support
-
-**Design System**:
-- Typography: Inter or Roboto font families
-- Spacing: Standardized Tailwind units (2, 4, 6, 8, 12, 16)
-- Layout: Max-width containers (max-w-7xl for content, max-w-md for forms)
-- Component hierarchy: Cards with clear visual separation
-
-### Backend Architecture
-
-**Server Framework**: Express.js with TypeScript running on Node.js
-
-**Authentication**: Session-based authentication using express-session with:
-- 7-day session expiration
-- HTTP-only cookies
-- Secure flag in production
-- Session storage configured via middleware
-
-**Password Security**: bcrypt for password hashing with salt rounds of 10
-
-**API Design**: RESTful API structure with route prefixes:
-- `/api/auth/*` - Authentication endpoints (login, logout, session check)
-- `/api/users` - User management
-- `/api/credentials` - Credential CRUD operations
-- `/api/payments` - Payment operations and PIX generation
-- `/api/admin/*` - Admin-specific endpoints
-
-**Middleware Stack**:
-- JSON body parsing with raw body capture for webhook validation
-- URL-encoded form parsing
-- Request logging with duration tracking
-- Authentication guards (requireAuth, requireAdmin)
-
-**Development Setup**: Vite integration for HMR in development with custom error overlay and Replit-specific tooling
+The backend is an **Express.js** application with **TypeScript** running on **Node.js**. It uses **session-based authentication** with `express-session` and `bcrypt` for password hashing. The **RESTful API** is structured with clear route prefixes. A middleware stack handles JSON and URL-encoded parsing, request logging, and authentication guards. Development includes Vite integration for HMR.
 
 ### Data Storage
 
-**Database**: PostgreSQL via Neon serverless driver (@neondatabase/serverless)
+**PostgreSQL** via `@neondatabase/serverless` is the primary database, managed by **Drizzle ORM**. The schema includes `Users` (id, email, password, status, ultimoPagamento, isAdmin), `Credentials` (id, userId, month, data - JSON with `ChaveAPI` filtered from client view), and `Payments` (id, userId, amount, status, txid, createdAt). Drizzle Kit is used for schema migrations.
 
-**ORM**: Drizzle ORM with schema definition in TypeScript
+### Authorization
 
-**Schema Structure**:
-
-1. **Users Table**:
-   - id (UUID, primary key)
-   - email (unique, text)
-   - password (bcrypt hashed, text)
-   - status (ATIVO/INATIVO, text)
-   - ultimoPagamento (timestamp, nullable)
-   - isAdmin (text, "true"/"false")
-
-2. **Credentials Table**:
-   - id (UUID, primary key)
-   - userId (foreign key to users)
-   - month (text, e.g., "Janeiro 2025")
-   - data (JSON string containing credential details)
-   
-   **Client View Filtering**: 
-   - "ChaveAPI" field is filtered out from client view (case-insensitive exact match)
-   - Only displays: Usuario, Senha (and other non-ChaveAPI fields)
-   - Admin retains full access to all credential fields
-
-3. **Payments Table**:
-   - id (UUID, primary key)
-   - userId (foreign key to users)
-   - amount (decimal)
-   - status (pending/paid/failed, text)
-   - txid (PIX transaction ID, text, nullable)
-   - createdAt (timestamp)
-
-**Storage Implementation**: Dual-mode storage system with in-memory fallback (MemStorage class) for development, designed to be swapped with PostgreSQL connection in production.
-
-**Migration Strategy**: Drizzle Kit for schema migrations with configuration pointing to PostgreSQL database URL from environment variables.
-
-### Authorization Model
-
-**Role-Based Access**:
-- Client users: Access to own credentials and payment management
-- Admin users: Full access to user management, all credentials, and payment monitoring
-
-**Route Protection**:
-- `requireAuth` middleware validates session exists
-- `requireAdmin` middleware validates admin role
-- Frontend route guards check user authentication status via `/api/auth/me` endpoint
-
-### User Management
-
-**Default Test Credentials**:
-- Admin: `admin@example.com` / `admin123`
-- Client: `cliente@example.com` / `cliente123`
-
-**Admin User Editing Workflow**:
-- Email field is **hidden** when editing existing users (cannot be changed after creation)
-- Only **Password** and **Status** fields are editable
-- Password field is optional when editing:
-  - If left empty: existing password is preserved
-  - If filled: new password is hashed and stored
-- Backend automatically hashes passwords with bcrypt (salt rounds: 10) before storage
+A **role-based access** model is implemented, differentiating between client users (access to own data) and admin users (full system access). `requireAuth` and `requireAdmin` middleware protect routes, with frontend guards checking authentication status.
 
 ### Payment Integration
 
-**Monthly Subscription**: R$ 17,50/month
+The system supports a **monthly subscription of R$ 17,50**. It integrates with the **PushinPay API** for PIX payment generation. The flow involves client initiation, backend generation of a unique TXID, API call to PushinPay, storage of payment in cents, and return of QR code data. A demo mode fallback is available for testing. Webhook handling is security-hardened with X-Token validation, TXID validation, and idempotency checks. Successful payments update user status to "ATIVO" and set `ultimoPagamento`.
 
-**PIX Generation Flow**:
-1. Client initiates payment from dashboard
-2. POST to `/api/payments/pix` with amount (accepts number or string, e.g., "17.50")
-3. Backend sanitizes input and generates own TXID (UUID via crypto.randomUUID())
-4. Backend calls PushinPay API with: `{ value: 1750, txid: ownTxid, webhook_url }`
-5. Backend stores payment in database with amount in CENTS (integer: 1750 = R$17.50)
-6. Returns to client: `{ txid: ownTxid, qrCode, qrCodeBase64, amount, amountCents }`
-7. Client polls `/api/payments/status/:txid` using returned TXID
+### Email Notification System
 
-**Demo Mode Fallback**:
-- Automatically activates when PushinPay API is unavailable or returns errors
-- Generates demo QR code and PIX "copia e cola" for testing
-- Controlled by USE_PUSHINPAY_WEBHOOK_SECRET environment variable (optional)
-- Ensures uninterrupted payment testing during development
-
-**Webhook Handling (SECURITY HARDENED)**:
-- **Authentication**: X-Token header validation using crypto.timingSafeEqual (constant-time comparison)
-- **TXID Validation**: Only accepts root-level `txid` field (ignores nested transaction.id to prevent forgery)
-- **Status Handling**: Accepts "paid", "pago", "confirmed" (case-insensitive)
-- **Idempotency**: Checks if payment already processed before updating
-- **User Activation**: Updates user.status to "ATIVO" and sets ultimoPagamento timestamp
-- **Amount Storage**: Amounts stored as centavos (cents) in decimal column as string (e.g., "1750" = R$17.50) for precise monetary math
-
-**UI Enhancements**:
-- Payment banner displays monthly subscription value (R$ 17,50) with CreditCard icon
-- Payment page highlights "Plano Mensal: R$ 17,50/mês" with Calendar icon
-- Icons from lucide-react library for consistent design
+**Resend** is used for automated payment reminders and account status notifications. Email templates include "Payment due tomorrow," "Payment due today," and "Access blocked," all branded and with WhatsApp contact. A `users.nextPaymentDate` field tracks payment due dates. Cron jobs (scheduled for Day 4, 5, and 6 relative to `nextPaymentDate` in America/Sao_Paulo timezone) trigger these notifications and block overdue users. Admin testing endpoints are available for emails and cron jobs. The system is designed for graceful degradation if `RESEND_API_KEY` is not configured or if cron jobs fail.
 
 ## External Dependencies
 
 ### Third-Party APIs
 
-**PushinPay API**: PIX payment generation service
-- **Production Endpoint**: POST https://api.pushinpay.com.br/api/pix/cashIn
-- **Sandbox Endpoint**: POST https://api-sandbox.pushinpay.com.br/api/pix/cashIn
-- **Authentication**: Authorization header with Bearer token
-- **Request Parameters**:
-  - `value` (required): Payment amount in cents (e.g., 1750 = R$17.50)
-  - `txid` (required): Our own UUID generated via crypto.randomUUID() for tracking
-  - `webhook_url` (optional): URL to receive payment status updates
-  - `split_rules` (optional): Array for revenue sharing between accounts
-- **Response Fields**:
-  - `id`: PushinPay's internal ID (we overwrite this with our txid for consistency)
-  - `qr_code`: PIX "Copia e Cola" copy-paste string
-  - `qr_code_base64`: Base64-encoded QR code image (may need data URI prefix added)
-  - `status`: Transaction status ("created", "paid", "confirmed", "canceled")
-  - `value`: Amount in cents
-- **Webhook Payload**:
-  - Sent as POST to webhook_url on payment status change
-  - Contains: `{ txid, status, ... }` at root level
-  - May include nested `transaction` object (ignored for security)
-  - Status values: "created", "paid", "confirmed", "canceled"
-- **Environment Variables**:
-  - `PUSHINPAY_TOKEN`: API authentication token (Bearer format)
-  - `PUSHINPAY_WEBHOOK_SECRET`: Secret token for webhook authentication via X-Token header
-  - `REPLIT_DEV_DOMAIN`: Used to construct webhook URL (warns if not set)
-  - `USE_PUSHINPAY_DEMO` (optional): Set to "true" to force demo mode
-- **Webhook Security (CRITICAL)**:
-  - Webhooks authenticated using `PUSHINPAY_WEBHOOK_SECRET` with constant-time comparison
-  - PushinPay sends `X-Token` header (not x-webhook-secret!)
-  - Also accepts `Authorization: Bearer <secret>` as fallback
-  - Uses crypto.timingSafeEqual to prevent timing attacks
-  - Only trusts root-level `txid` field (ignores nested transaction.id to prevent forgery)
-  - Requests without valid secret rejected with 401 Unauthorized
+*   **PushinPay API**: For PIX payment generation.
+    *   `PUSHINPAY_TOKEN` for authentication.
+    *   `PUSHINPAY_WEBHOOK_SECRET` for webhook authentication.
+*   **Resend**: Transactional email service for notifications.
+    *   `RESEND_API_KEY` and `RESEND_FROM_EMAIL`.
 
 ### Database Services
 
-**Neon PostgreSQL**: Serverless PostgreSQL database
-- Connection via @neondatabase/serverless package
-- DATABASE_URL environment variable required
-- Used with Drizzle ORM for type-safe queries
+*   **Neon PostgreSQL**: Serverless PostgreSQL database.
 
 ### UI Component Libraries
 
-**Radix UI**: Headless component primitives
-- Comprehensive set of accessible components
-- Dialog, Dropdown, Select, Toast, and 20+ other primitives
-- Provides behavior and accessibility, styled with Tailwind
-
-**shadcn/ui**: Pre-styled component layer on top of Radix UI
-- Customizable via components.json configuration
-- New York style variant selected
-- Components aliased under @/components
+*   **Radix UI**: Headless component primitives.
+*   **shadcn/ui**: Pre-styled component library built on Radix UI.
 
 ### Development Tools
 
-**Replit Integration**:
-- @replit/vite-plugin-runtime-error-modal for error overlay
-- @replit/vite-plugin-cartographer for code navigation
-- @replit/vite-plugin-dev-banner for development indicators
-- Conditional loading in non-production environments
+*   **Replit Integration Plugins**: For error modals, code navigation, and dev banners in non-production environments.
 
 ### Session Management
 
-**express-session**: Server-side session management
-- connect-pg-simple available for PostgreSQL session store (not currently configured)
-- In-memory session store in current implementation
-- SESSION_SECRET environment variable for signing cookies
+*   **express-session**: Server-side session management.
 
 ### Form Handling
 
-**React Hook Form**: Form state management on frontend
-- @hookform/resolvers for Zod schema validation
-- Integration with shadcn/ui form components
-
-**Zod**: Schema validation
-- Used with drizzle-zod for automatic schema generation from database schema
-- Runtime validation of API requests and form inputs
+*   **React Hook Form**: Frontend form state management.
+*   **Zod**: Schema validation for runtime checks and form inputs.

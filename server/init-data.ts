@@ -27,11 +27,16 @@ export async function initializeData() {
       isAdmin: "false",
     });
     
-    // Update client with payment date
+    // Calculate next payment date (30 days from now)
+    const nextPaymentDate = new Date();
+    nextPaymentDate.setDate(nextPaymentDate.getDate() + 30);
+    
+    // Update client with payment date and next vencimento
     await storage.updateUser(client.id, {
       ultimoPagamento: new Date(),
+      nextPaymentDate: nextPaymentDate,
     });
-    console.log("✓ Client user created: cliente@example.com / cliente123");
+    console.log(`✓ Client user created: cliente@example.com / cliente123 (next payment: ${nextPaymentDate.toISOString().split('T')[0]})`);
 
     // Create sample shared credentials (available to all active users)
     const credentialDataJan = {

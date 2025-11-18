@@ -5,6 +5,8 @@ import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { insertUserSchema, insertCredentialSchema, insertPaymentSchema } from "@shared/schema";
+import { manualTriggers } from "./jobs/paymentCron";
+import { sendEmail, emailTemplates } from "./utils/email";
 
 // Extend session data
 declare module 'express-session' {
@@ -528,6 +530,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: Test email system (manual trigger)
+  app.post("/api/admin/test-email", requireAdmin, async (req, res) => {
+    try {
+      const { type, email } = req.body;
+      
+      if (!type || !email) {
+        return res.status(400).json({ 
+          error: "Missing required fields: type (tomorrow|today|blocked) and email" 
+        });
+      }
+
+      let template;
+      let success = false;
+
+      switch (type) {
+        case "tomorrow":
+          template = emailTemplates.paymentDueTomorrow(email.split('@')[0]);
+          success = await sendEmail({
+            to: email,
+            subject: template.subject,
+            html: template.html,
+          });
+          break;
+
+        case "today":
+          template = emailTemplates.paymentDueToday(email.split('@')[0]);
+          success = await sendEmail({
+            to: email,
+            subject: template.subject,
+            html: template.html,
+          });
+          break;
+
+        case "blocked":
+          template = emailTemplates.accessBlocked(email.split('@')[0]);
+          success = await sendEmail({
+            to: email,
+            subject: template.subject,
+            html: template.html,
+          });
+          break;
+
+        default:
+          return res.status(400).json({ 
+            error: "Invalid type. Must be: tomorrow, today, or blocked" 
+          });
+      }
+
+      if (success) {
+        res.json({ 
+          success: true, 
+          message: `Test email sent successfully to ${email}`,
+          type 
+        });
+      } else {
+        res.status(500).json({ 
+          success: false, 
+          error: "Failed to send email. Check server logs and RESEND_API_KEY configuration." 
+        });
+      }
+    } catch (error) {
+      console.error("Test email error:", error);
+      res.status(500).json({ error: "Erro ao enviar email de teste" });
+    }
+  });
+
+  // Admin: Manual trigger for cron jobs (testing)
+  app.post("/api/admin/trigger-cron", requireAdmin, async (req, res) => {
+    try {
+      const { action } = req.body;
+
+      if (!action) {
+        return res.status(400).json({ 
+          error: "Missing required field: action (tomorrow|today|block)" 
+        });
+      }
+
+      let result;
+      
+      switch (action) {
+        case "tomorrow":
+          await manualTriggers.sendPaymentDueTomorrowEmails();
+          result = "Payment due tomorrow emails triggered";
+          break;
+
+        case "today":
+          await manualTriggers.sendPaymentDueTodayEmails();
+          result = "Payment due today emails triggered";
+          break;
+
+        case "block":
+          await manualTriggers.blockOverdueUsers();
+          result = "Block overdue users triggered";
+          break;
+
+        default:
+          return res.status(400).json({ 
+            error: "Invalid action. Must be: tomorrow, today, or block" 
+          });
+      }
+
+      res.json({ 
+        success: true, 
+        message: result,
+        note: "Check server logs for detailed execution results"
+      });
+    } catch (error) {
+      console.error("Manual cron trigger error:", error);
+      res.status(500).json({ error: "Erro ao executar cron manualmente" });
+    }
+  });
+
   // Webhook from PushinPay
   app.post("/api/webhook/pushinpay", async (req, res) => {
     try {
@@ -622,13 +736,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update payment status
         await storage.updatePayment(payment.id, { status: "paid" });
         
-        // Update user status and set payment date
+        // Calculate next payment date (30 days from now)
+        const nextPaymentDate = new Date();
+        nextPaymentDate.setDate(nextPaymentDate.getDate() + 30);
+        
+        // Update user status, payment date, and next payment date
         await storage.updateUser(payment.userId, {
           status: "ATIVO",
           ultimoPagamento: new Date(),
+          nextPaymentDate: nextPaymentDate, // Set next vencimento (30 days)
         });
         
-        console.log(`User ${payment.userId} activated successfully`);
+        console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]})`);
         
         res.json({ success: true, message: "Payment processed" });
       } else if (normalizedStatus === "canceled" || normalizedStatus === "cancelled" || normalizedStatus === "failed") {

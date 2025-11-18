@@ -9,6 +9,7 @@ export const users = pgTable("users", {
   password: text("password").notNull(),
   status: text("status").notNull().default("INATIVO"),
   ultimoPagamento: timestamp("ultimo_pagamento"),
+  nextPaymentDate: timestamp("next_payment_date"), // Data do próximo vencimento (mensal)
   isAdmin: text("is_admin").notNull().default("false"),
 });
 
@@ -31,6 +32,7 @@ export const payments = pgTable("payments", {
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   ultimoPagamento: true,
+  nextPaymentDate: true, // Calculado automaticamente ao processar pagamento
 });
 
 export const insertCredentialSchema = createInsertSchema(credentials).omit({
