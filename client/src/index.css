@@ -300,3 +300,12 @@
     inset: -1px;
   }
 }
+
+/* Custom Purple Cursor */
+* {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%237C3AED' d='M5.5 3.21v17.58l4.42-4.42 3.58 6.55 3-1.64-3.58-6.55 7.58-.78z'/%3E%3C/svg%3E"), auto;
+}
+
+button, a, input, textarea, select {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath fill='%237C3AED' d='M5.5 3.21v17.58l4.42-4.42 3.58 6.55 3-1.64-3.58-6.55 7.58-.78z'/%3E%3C/svg%3E"), pointer;
+}
