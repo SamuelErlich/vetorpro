@@ -21,12 +21,12 @@ Preferred communication style: Simple, everyday language.
 - `/admin` - Admin dashboard (protected)
 - `/payment` - PIX payment generation page
 
-**WhatsApp Integration**: Context-aware floating contact buttons
-- Login page (unauthenticated): "Preciso de acesso ao vectorizer"
+**WhatsApp Integration**: Context-aware contact buttons
+- Login page button (inside card): "Preciso de acesso ao vectorizer"
+- Login page forgot password link: "Esqueci meu acesso e desejo alterar"
 - Dashboard (authenticated): "Preciso de ajuda com meu acesso"
-- Forgot password link: "Esqueci meu acesso e desejo alterar"
 - Contact number: +55 44 93618-4613
-- Fixed positioning: bottom-left corner, green WhatsApp branding (#25D366)
+- Positioning: WhatsApp button integrated into login form below "Esqueceu sua senha?" link
 
 **State Management**: TanStack Query (React Query) for server state management with custom query client configuration. Session data is managed server-side with cookies.
 
@@ -118,6 +118,20 @@ Preferred communication style: Simple, everyday language.
 - `requireAuth` middleware validates session exists
 - `requireAdmin` middleware validates admin role
 - Frontend route guards check user authentication status via `/api/auth/me` endpoint
+
+### User Management
+
+**Default Test Credentials**:
+- Admin: `admin@example.com` / `admin123`
+- Client: `cliente@example.com` / `cliente123`
+
+**Admin User Editing Workflow**:
+- Email field is **hidden** when editing existing users (cannot be changed after creation)
+- Only **Password** and **Status** fields are editable
+- Password field is optional when editing:
+  - If left empty: existing password is preserved
+  - If filled: new password is hashed and stored
+- Backend automatically hashes passwords with bcrypt (salt rounds: 10) before storage
 
 ### Payment Integration
 
