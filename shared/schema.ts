@@ -6,7 +6,7 @@ import { z } from "zod";
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
-  password: text("password").notNull(),
+  password: text("password"), // Nullable - senha criada via email quando usuário é criado pelo admin
   status: text("status").notNull().default("INATIVO"),
   ultimoPagamento: timestamp("ultimo_pagamento"),
   nextPaymentDate: timestamp("next_payment_date"), // Data do próximo vencimento (mensal)
@@ -29,6 +29,14 @@ export const payments = pgTable("payments", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+export const passwordResets = pgTable("password_resets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  token: text("token").notNull().unique(),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   ultimoPagamento: true,
@@ -47,9 +55,16 @@ export const insertPaymentSchema = createInsertSchema(payments).omit({
   amount: z.string(), // Override to explicitly accept string (cents as string)
 });
 
+export const insertPasswordResetSchema = createInsertSchema(passwordResets).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertCredential = z.infer<typeof insertCredentialSchema>;
 export type Credential = typeof credentials.$inferSelect;
 export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
+export type InsertPasswordReset = z.infer<typeof insertPasswordResetSchema>;
+export type PasswordReset = typeof passwordResets.$inferSelect;

@@ -9,6 +9,7 @@ import AdminLogin from "@/pages/AdminLogin";
 import ClientDashboard from "@/pages/ClientDashboard";
 import AdminDashboard from "@/pages/AdminDashboard";
 import PaymentPage from "@/pages/PaymentPage";
+import CriarSenha from "@/pages/CriarSenha";
 
 function Router() {
   return (
@@ -18,6 +19,7 @@ function Router() {
       <Route path="/dashboard" component={ClientDashboard} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/payment" component={PaymentPage} />
+      <Route path="/criar-senha" component={CriarSenha} />
       <Route component={NotFound} />
     </Switch>
   );

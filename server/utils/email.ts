@@ -237,4 +237,53 @@ export const emailTemplates = {
       </html>
     `,
   }),
+
+  // Criação de senha (novo usuário)
+  createPassword: (email: string, token: string) => ({
+    subject: '🔑 Crie sua senha de acesso - VectorPro',
+    html: `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+            .content { background: #f0f9ff; padding: 30px; border-radius: 0 0 8px 8px; }
+            .button { display: inline-block; background: #3b82f6; color: white; padding: 14px 28px; text-decoration: none; border-radius: 6px; margin-top: 20px; font-weight: bold; }
+            .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
+            .info { background: #dbeafe; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 4px solid #3b82f6; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>✨ VectorPro</h1>
+              <p style="margin: 0; font-size: 18px;">Bem-vindo(a)!</p>
+            </div>
+            <div class="content">
+              <h2>Olá!</h2>
+              <p>Uma conta foi criada para você no sistema VectorPro com o email: <strong>${email}</strong></p>
+              <div class="info">
+                <strong>🔐 Próximo passo:</strong> Crie sua senha de acesso para começar a usar o sistema.
+              </div>
+              <p>Para criar sua senha e acessar suas credenciais, clique no botão abaixo:</p>
+              <a href="${process.env.REPLIT_DEV_DOMAIN || 'https://vectorpro.replit.app'}/criar-senha?token=${token}" class="button">Criar Minha Senha</a>
+              <p style="margin-top: 30px; font-size: 14px; color: #6b7280;">
+                ⏰ Este link é válido por 24 horas. Após esse período, será necessário solicitar um novo link.
+              </p>
+              <p style="font-size: 13px; color: #9ca3af; margin-top: 20px;">
+                Se você não solicitou esta conta, pode ignorar este email.
+              </p>
+            </div>
+            <div class="footer">
+              <p>VectorPro - Gestão de Credenciais</p>
+              <p>Precisa de ajuda? Entre em contato via WhatsApp: +55 44 93618-4613</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `,
+  }),
 };

@@ -19,6 +19,7 @@ import AdminUserTable from "@/components/AdminUserTable";
 import AdminPaymentTable from "@/components/AdminPaymentTable";
 import AdminCredentialTable from "@/components/AdminCredentialTable";
 import UserFormDialog from "@/components/UserFormDialog";
+import CreateUserDialog from "@/components/CreateUserDialog";
 import CredentialFormDialog from "@/components/CredentialFormDialog";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +34,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("users");
   const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
   const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editingCredential, setEditingCredential] = useState<any>(null);
@@ -198,8 +200,7 @@ export default function AdminDashboard() {
   };
 
   const handleAddUser = () => {
-    setEditingUser(null);
-    setUserDialogOpen(true);
+    setCreateUserDialogOpen(true);
   };
 
   const handleEditUser = (userId: string) => {
@@ -356,6 +357,11 @@ export default function AdminDashboard() {
           </main>
         </div>
       </div>
+
+      <CreateUserDialog
+        open={createUserDialogOpen}
+        onOpenChange={setCreateUserDialogOpen}
+      />
 
       <UserFormDialog
         open={userDialogOpen}

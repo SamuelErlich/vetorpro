@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import session from "express-session";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
+import { z } from "zod";
 import { storage } from "./storage";
 import { insertUserSchema, insertCredentialSchema, insertPaymentSchema } from "@shared/schema";
 import { manualTriggers } from "./jobs/paymentCron";
@@ -72,6 +73,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 
+      // Check if password has been set
+      if (!user.password) {
+        return res.status(401).json({ 
+          error: "Senha não definida. Verifique seu email para criar sua senha.",
+          passwordNotSet: true 
+        });
+      }
+
       const validPassword = await bcrypt.compare(password, user.password);
       if (!validPassword) {
         return res.status(401).json({ error: "Credenciais inválidas" });
@@ -97,6 +106,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUserByEmail(email);
       if (!user || user.isAdmin !== "true") {
         return res.status(401).json({ error: "Credenciais inválidas" });
+      }
+
+      // Check if password has been set
+      if (!user.password) {
+        return res.status(401).json({ 
+          error: "Senha não definida. Verifique seu email para criar sua senha.",
+          passwordNotSet: true 
+        });
       }
 
       const validPassword = await bcrypt.compare(password, user.password);
@@ -138,6 +155,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get me error:", error);
       res.status(500).json({ error: "Erro ao buscar usuário" });
+    }
+  });
+
+  // Validate password reset token
+  app.get("/api/auth/validate-token/:token", async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      const reset = await storage.getPasswordResetByToken(token);
+      if (!reset) {
+        return res.status(400).json({ valid: false, error: "Token inválido" });
+      }
+
+      // Check if token has expired
+      if (new Date() > new Date(reset.expiresAt)) {
+        return res.status(400).json({ valid: false, error: "Token expirado" });
+      }
+
+      res.json({ valid: true });
+    } catch (error) {
+      console.error("Validate token error:", error);
+      res.status(500).json({ error: "Erro ao validar token" });
+    }
+  });
+
+  // Create password from token
+  app.post("/api/auth/create-password", async (req, res) => {
+    try {
+      // Validate request body with Zod
+      const createPasswordSchema = z.object({
+        token: z.string().min(1, "Token é obrigatório"),
+        password: z.string().min(6, "A senha deve ter no mínimo 6 caracteres"),
+      });
+
+      const validatedData = createPasswordSchema.parse(req.body);
+      const { token, password } = validatedData;
+
+      // Validate token
+      const reset = await storage.getPasswordResetByToken(token);
+      if (!reset) {
+        return res.status(400).json({ error: "Token inválido" });
+      }
+
+      // Check if token has expired
+      if (new Date() > new Date(reset.expiresAt)) {
+        return res.status(400).json({ error: "Token expirado. Solicite um novo link." });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Update user password
+      await storage.updateUser(reset.userId, {
+        password: hashedPassword,
+      });
+
+      // Delete all password reset tokens for this user
+      await storage.deletePasswordResetsByUserId(reset.userId);
+
+      console.log(`✅ [CREATE-PASSWORD] Password created for user ${reset.userId}`);
+
+      res.json({ success: true, message: "Senha criada com sucesso! Você já pode fazer login." });
+    } catch (error: any) {
+      // Handle Zod validation errors
+      if (error.name === 'ZodError') {
+        const firstError = error.errors[0];
+        return res.status(400).json({ error: firstError.message });
+      }
+      console.error("Create password error:", error);
+      res.status(500).json({ error: "Erro ao criar senha" });
     }
   });
 
@@ -593,6 +680,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Test email error:", error);
       res.status(500).json({ error: "Erro ao enviar email de teste" });
+    }
+  });
+
+  // Admin: Create user and send password creation email
+  app.post("/api/admin/users/create-and-send-email", requireAdmin, async (req, res) => {
+    try {
+      // Validate request body with Zod
+      const createUserEmailSchema = z.object({
+        email: z.string().email("Email inválido"),
+        status: z.enum(["ATIVO", "PENDENTE", "INATIVO", "BLOQUEADO"]).optional(),
+      });
+
+      const validatedData = createUserEmailSchema.parse(req.body);
+      const { email, status } = validatedData;
+
+      // Check if email already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ error: "Email já cadastrado" });
+      }
+
+      // Create user without password
+      const user = await storage.createUser({
+        email,
+        password: null, // Will be set by user via email link
+        status: status || "PENDENTE",
+        isAdmin: "false",
+      });
+
+      // Generate secure token
+      const token = crypto.randomBytes(32).toString("hex");
+
+      // Create password reset token (valid for 24 hours)
+      const expiresAt = new Date();
+      expiresAt.setHours(expiresAt.getHours() + 24);
+
+      await storage.createPasswordReset({
+        userId: user.id,
+        token,
+        expiresAt,
+      });
+
+      // Send email with password creation link
+      const template = emailTemplates.createPassword(email, token);
+      const emailSent = await sendEmail({
+        to: email,
+        subject: template.subject,
+        html: template.html,
+      });
+
+      if (!emailSent) {
+        // User was created but email failed - still return success but warn
+        console.warn(`⚠️  User created but email failed to send to ${email}`);
+        return res.json({
+          success: true,
+          user: { id: user.id, email: user.email, status: user.status },
+          emailSent: false,
+          warning: "Usuário criado mas o email não pôde ser enviado. Configure RESEND_API_KEY.",
+        });
+      }
+
+      console.log(`✅ [CREATE-USER] User created and email sent to ${email}`);
+
+      res.json({
+        success: true,
+        user: { id: user.id, email: user.email, status: user.status },
+        emailSent: true,
+        message: `Usuário criado! Um email foi enviado para ${email} com instruções para criar a senha.`,
+      });
+    } catch (error: any) {
+      // Handle Zod validation errors
+      if (error.name === 'ZodError') {
+        const firstError = error.errors[0];
+        return res.status(400).json({ error: firstError.message });
+      }
+      console.error("Create user and send email error:", error);
+      res.status(500).json({ error: "Erro ao criar usuário e enviar email" });
     }
   });
 

@@ -5,9 +5,12 @@ import {
   type InsertCredential,
   type Payment,
   type InsertPayment,
+  type PasswordReset,
+  type InsertPasswordReset,
   users,
   credentials,
-  payments
+  payments,
+  passwordResets
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -39,17 +42,25 @@ export interface IStorage {
   createPayment(payment: InsertPayment): Promise<Payment>;
   updatePayment(id: string, payment: Partial<Payment>): Promise<Payment | undefined>;
   getPaymentByTxid(txid: string): Promise<Payment | undefined>;
+  
+  // Password Resets
+  createPasswordReset(reset: InsertPasswordReset): Promise<PasswordReset>;
+  getPasswordResetByToken(token: string): Promise<PasswordReset | undefined>;
+  deletePasswordReset(id: string): Promise<boolean>;
+  deletePasswordResetsByUserId(userId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
   private credentials: Map<string, Credential>;
   private payments: Map<string, Payment>;
+  private passwordResets: Map<string, PasswordReset>;
 
   constructor() {
     this.users = new Map();
     this.credentials = new Map();
     this.payments = new Map();
+    this.passwordResets = new Map();
   }
 
   // Users
@@ -71,11 +82,12 @@ export class MemStorage implements IStorage {
     const id = randomUUID();
     const user: User = { 
       email: insertUser.email,
-      password: insertUser.password,
+      password: insertUser.password || null,
       status: insertUser.status || "INATIVO",
       isAdmin: insertUser.isAdmin || "false",
       id,
       ultimoPagamento: null,
+      nextPaymentDate: null,
     };
     this.users.set(id, user);
     return user;
@@ -184,6 +196,37 @@ export class MemStorage implements IStorage {
       (payment) => payment.txid === txid,
     );
   }
+
+  // Password Resets
+  async createPasswordReset(insertReset: InsertPasswordReset): Promise<PasswordReset> {
+    const id = randomUUID();
+    const reset: PasswordReset = {
+      id,
+      userId: insertReset.userId,
+      token: insertReset.token,
+      expiresAt: insertReset.expiresAt,
+      createdAt: new Date(),
+    };
+    this.passwordResets.set(id, reset);
+    return reset;
+  }
+
+  async getPasswordResetByToken(token: string): Promise<PasswordReset | undefined> {
+    return Array.from(this.passwordResets.values()).find(
+      (reset) => reset.token === token,
+    );
+  }
+
+  async deletePasswordReset(id: string): Promise<boolean> {
+    return this.passwordResets.delete(id);
+  }
+
+  async deletePasswordResetsByUserId(userId: string): Promise<void> {
+    const resets = Array.from(this.passwordResets.values()).filter(
+      (reset) => reset.userId === userId,
+    );
+    resets.forEach((reset) => this.passwordResets.delete(reset.id));
+  }
 }
 
 // PostgreSQL storage using Drizzle ORM
@@ -285,6 +328,26 @@ class PostgresStorage implements IStorage {
   async getPaymentByTxid(txid: string): Promise<Payment | undefined> {
     const result = await this.db.select().from(payments).where(eq(payments.txid, txid!));
     return result[0];
+  }
+
+  // Password Resets
+  async createPasswordReset(insertReset: InsertPasswordReset): Promise<PasswordReset> {
+    const result = await this.db.insert(passwordResets).values(insertReset).returning();
+    return result[0];
+  }
+
+  async getPasswordResetByToken(token: string): Promise<PasswordReset | undefined> {
+    const result = await this.db.select().from(passwordResets).where(eq(passwordResets.token, token));
+    return result[0];
+  }
+
+  async deletePasswordReset(id: string): Promise<boolean> {
+    const result = await this.db.delete(passwordResets).where(eq(passwordResets.id, id)).returning();
+    return result.length > 0;
+  }
+
+  async deletePasswordResetsByUserId(userId: string): Promise<void> {
+    await this.db.delete(passwordResets).where(eq(passwordResets.userId, userId));
   }
 }
 
