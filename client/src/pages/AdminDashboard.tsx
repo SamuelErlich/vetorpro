@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   Sidebar,
   SidebarContent,
@@ -13,64 +14,232 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Users, CreditCard, Key, LogOut, Menu } from "lucide-react";
+import { Users, CreditCard, Key, LogOut } from "lucide-react";
 import AdminUserTable from "@/components/AdminUserTable";
 import AdminPaymentTable from "@/components/AdminPaymentTable";
+import AdminCredentialTable from "@/components/AdminCredentialTable";
 import UserFormDialog from "@/components/UserFormDialog";
+import CredentialFormDialog from "@/components/CredentialFormDialog";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("users");
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [userDialogOpen, setUserDialogOpen] = useState(false);
+  const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [editingCredential, setEditingCredential] = useState<any>(null);
 
-  // todo: remove mock functionality
-  const mockUsers = [
-    { id: "1", email: "cliente1@example.com", status: "ATIVO" as const, lastPayment: "15/01/2025" },
-    { id: "2", email: "cliente2@example.com", status: "INATIVO" as const, lastPayment: "15/12/2024" },
-    { id: "3", email: "cliente3@example.com", status: "ATIVO" as const, lastPayment: "18/01/2025" },
-  ];
+  // Fetch data
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ['/api/users'],
+  });
 
-  const mockPayments = [
-    { id: "1", userEmail: "cliente1@example.com", date: "15/01/2025", amount: "99,90", status: "paid" as const, txid: "ABC123XYZ" },
-    { id: "2", userEmail: "cliente2@example.com", date: "14/01/2025", amount: "99,90", status: "pending" as const },
-    { id: "3", userEmail: "cliente3@example.com", date: "18/01/2025", amount: "99,90", status: "paid" as const, txid: "DEF456UVW" },
-  ];
+  const { data: paymentsData, isLoading: paymentsLoading } = useQuery({
+    queryKey: ['/api/admin/payments'],
+  });
+
+  const { data: credentialsData, isLoading: credentialsLoading } = useQuery({
+    queryKey: ['/api/admin/credentials'],
+  });
+
+  // Mutations
+  const logoutMutation = useMutation({
+    mutationFn: () => apiRequest('/api/auth/logout', { method: 'POST' }),
+    onSuccess: () => {
+      queryClient.clear();
+      setLocation('/admin/login');
+    },
+  });
+
+  const createUserMutation = useMutation({
+    mutationFn: (data: any) =>
+      apiRequest('/api/users', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      toast({ title: "Usuário criado com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao criar usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateUserMutation = useMutation({
+    mutationFn: ({ id, data }: any) =>
+      apiRequest(`/api/users/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      toast({ title: "Usuário atualizado com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/users/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      toast({ title: "Usuário deletado com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao deletar usuário",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const createCredentialMutation = useMutation({
+    mutationFn: (data: any) =>
+      apiRequest('/api/admin/credentials', {
+        method: 'POST',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/credentials'] });
+      toast({ title: "Credencial criada com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao criar credencial",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const updateCredentialMutation = useMutation({
+    mutationFn: ({ id, data }: any) =>
+      apiRequest(`/api/admin/credentials/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/credentials'] });
+      toast({ title: "Credencial atualizada com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar credencial",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCredentialMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/admin/credentials/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/credentials'] });
+      toast({ title: "Credencial deletada com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao deletar credencial",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
 
   const menuItems = [
     { title: "Usuários", icon: Users, id: "users" },
-    { title: "Pagamentos", icon: CreditCard, id: "payments" },
     { title: "Credenciais", icon: Key, id: "credentials" },
+    { title: "Pagamentos", icon: CreditCard, id: "payments" },
   ];
 
   const handleLogout = () => {
-    console.log('Admin logout');
-    setLocation('/admin/login');
+    logoutMutation.mutate();
   };
 
   const handleAddUser = () => {
     setEditingUser(null);
-    setDialogOpen(true);
+    setUserDialogOpen(true);
   };
 
   const handleEditUser = (userId: string) => {
-    const user = mockUsers.find(u => u.id === userId);
+    const user = usersData?.find((u: any) => u.id === userId);
     setEditingUser(user);
-    setDialogOpen(true);
+    setUserDialogOpen(true);
   };
 
   const handleDeleteUser = (userId: string) => {
-    console.log('Delete user:', userId);
+    if (confirm("Tem certeza que deseja deletar este usuário?")) {
+      deleteUserMutation.mutate(userId);
+    }
   };
 
   const handleSubmitUser = (data: any) => {
-    console.log('Submit user:', data);
+    if (editingUser) {
+      updateUserMutation.mutate({ id: editingUser.id, data });
+    } else {
+      createUserMutation.mutate(data);
+    }
+  };
+
+  const handleAddCredential = () => {
+    setEditingCredential(null);
+    setCredentialDialogOpen(true);
+  };
+
+  const handleEditCredential = (credentialId: string) => {
+    const credential = credentialsData?.find((c: any) => c.id === credentialId);
+    setEditingCredential(credential);
+    setCredentialDialogOpen(true);
+  };
+
+  const handleDeleteCredential = (credentialId: string) => {
+    if (confirm("Tem certeza que deseja deletar esta credencial?")) {
+      deleteCredentialMutation.mutate(credentialId);
+    }
+  };
+
+  const handleSubmitCredential = (data: any) => {
+    if (editingCredential) {
+      updateCredentialMutation.mutate({ id: editingCredential.id, data });
+    } else {
+      createCredentialMutation.mutate(data);
+    }
   };
 
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
+
+  // Enrich credentials with user emails
+  const enrichedCredentials = credentialsData?.map((cred: any) => {
+    const user = usersData?.find((u: any) => u.id === cred.userId);
+    return {
+      ...cred,
+      userEmail: user?.email || "Unknown",
+    };
+  }) || [];
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
@@ -113,22 +282,55 @@ export default function AdminDashboard() {
           <main className="flex-1 overflow-auto p-8">
             <div className="max-w-7xl mx-auto space-y-8">
               {activeTab === "users" && (
-                <AdminUserTable
-                  users={mockUsers}
-                  onAdd={handleAddUser}
-                  onEdit={handleEditUser}
-                  onDelete={handleDeleteUser}
-                />
-              )}
-
-              {activeTab === "payments" && (
-                <AdminPaymentTable payments={mockPayments} />
+                <>
+                  {usersLoading ? (
+                    <Skeleton className="h-96 w-full" />
+                  ) : (
+                    <AdminUserTable
+                      users={usersData?.map((u: any) => ({
+                        ...u,
+                        lastPayment: u.ultimoPagamento 
+                          ? new Date(u.ultimoPagamento).toLocaleDateString('pt-BR')
+                          : undefined,
+                      })) || []}
+                      onAdd={handleAddUser}
+                      onEdit={handleEditUser}
+                      onDelete={handleDeleteUser}
+                    />
+                  )}
+                </>
               )}
 
               {activeTab === "credentials" && (
-                <div className="text-center py-12 text-muted-foreground">
-                  Gerenciamento de credenciais em desenvolvimento
-                </div>
+                <>
+                  {credentialsLoading || usersLoading ? (
+                    <Skeleton className="h-96 w-full" />
+                  ) : (
+                    <AdminCredentialTable
+                      credentials={enrichedCredentials}
+                      users={usersData || []}
+                      onAdd={handleAddCredential}
+                      onEdit={handleEditCredential}
+                      onDelete={handleDeleteCredential}
+                    />
+                  )}
+                </>
+              )}
+
+              {activeTab === "payments" && (
+                <>
+                  {paymentsLoading ? (
+                    <Skeleton className="h-96 w-full" />
+                  ) : (
+                    <AdminPaymentTable 
+                      payments={paymentsData?.map((p: any) => ({
+                        ...p,
+                        date: new Date(p.createdAt).toLocaleDateString('pt-BR'),
+                        amount: parseFloat(p.amount).toFixed(2).replace('.', ','),
+                      })) || []} 
+                    />
+                  )}
+                </>
               )}
             </div>
           </main>
@@ -136,10 +338,18 @@ export default function AdminDashboard() {
       </div>
 
       <UserFormDialog
-        open={dialogOpen}
-        onClose={() => setDialogOpen(false)}
+        open={userDialogOpen}
+        onClose={() => setUserDialogOpen(false)}
         onSubmit={handleSubmitUser}
         user={editingUser}
+      />
+
+      <CredentialFormDialog
+        open={credentialDialogOpen}
+        onClose={() => setCredentialDialogOpen(false)}
+        onSubmit={handleSubmitCredential}
+        users={usersData || []}
+        credential={editingCredential}
       />
     </SidebarProvider>
   );

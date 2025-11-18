@@ -1,25 +1,61 @@
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
 import PixPaymentCard from "@/components/PixPaymentCard";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function PaymentPage() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [pixData, setPixData] = useState<any>(null);
 
-  // todo: remove mock functionality - generate real PIX via backend
-  const mockPixData = {
-    qrCode: "https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=00020126580014br.gov.bcb.pix0136a1b2c3d4-e5f6-7890-abcd-ef1234567890520400005303986540599.905802BR5925NOME DO BENEFICIARIO6014CIDADE6304ABCD",
-    pixCode: "00020126580014br.gov.bcb.pix0136a1b2c3d4-e5f6-7890-abcd-ef1234567890520400005303986540599.905802BR5925NOME DO BENEFICIARIO6014CIDADE6304ABCD",
-    amount: "99,90"
-  };
+  const generatePixMutation = useMutation({
+    mutationFn: () =>
+      apiRequest('/api/payments/pix', {
+        method: 'POST',
+        body: JSON.stringify({ amount: 99.90 }),
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    onSuccess: (data) => {
+      setPixData(data);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao gerar PIX",
+        description: error.message,
+        variant: "destructive",
+      });
+      setLocation('/dashboard');
+    },
+  });
+
+  useEffect(() => {
+    generatePixMutation.mutate();
+  }, []);
 
   const handleReturn = () => {
     setLocation('/dashboard');
   };
 
+  if (!pixData || generatePixMutation.isPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-2xl space-y-6">
+          <Skeleton className="h-12 w-64 mx-auto" />
+          <Skeleton className="h-64 w-64 mx-auto" />
+          <Skeleton className="h-32 w-full" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <PixPaymentCard
-      qrCode={mockPixData.qrCode}
-      pixCode={mockPixData.pixCode}
-      amount={mockPixData.amount}
+      qrCode={pixData.qrCode}
+      pixCode={pixData.pixCode}
+      amount="99,90"
       onReturn={handleReturn}
     />
   );
