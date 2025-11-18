@@ -80,10 +80,16 @@ export default function ClientDashboard() {
       return {
         id: cred.id,
         month: cred.month,
-        items: Object.entries(data).map(([key, value]) => ({
-          label: key.charAt(0).toUpperCase() + key.slice(1),
-          value: String(value),
-        })),
+        items: Object.entries(data)
+          .filter(([key]) => {
+            // Remove only ChaveAPI field from display (case-insensitive)
+            const lowerKey = key.toLowerCase();
+            return lowerKey !== 'chaveapi';
+          })
+          .map(([key, value]) => ({
+            label: key.charAt(0).toUpperCase() + key.slice(1),
+            value: String(value),
+          })),
       };
     } catch {
       return {
