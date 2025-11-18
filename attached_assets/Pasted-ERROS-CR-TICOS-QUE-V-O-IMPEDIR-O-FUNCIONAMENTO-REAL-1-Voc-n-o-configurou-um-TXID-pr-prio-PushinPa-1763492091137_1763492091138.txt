@@ -1,0 +1,157 @@
+ERROS CRÍTICOS QUE VÃO IMPEDIR O FUNCIONAMENTO REAL
+1. Você não configurou um TXID próprio
+
+PushinPay aceita isso, mas se você não enviar um TXID, ela vai te retornar o dela.
+
+Isso causa:
+
+duplicidade
+
+dificuldade no webhook
+
+perdas de rastreio
+
+Solução:
+Envie sempre seu TXID gerado por você:
+
+const txid = crypto.randomUUID();
+
+
+E envie no POST:
+
+{
+  value: amountInCents,
+  webhook_url: webhookUrl,
+  txid: txid
+}
+
+
+Hoje sua lógica baseia-se em:
+
+txid = pixData.id
+
+
+→ ERRADO
+O id da PushinPay é interno, não TXID.
+
+2. Seu servidor não está lendo o corpo JSON no webhook
+
+Você NÃO tem:
+
+app.use(express.json());
+
+
+Sem isso o PushinPay webhook vai retornar:
+
+undefined undefined
+
+
+E o pagamento nunca atualiza.
+
+3. Você está usando cabeçalhos errados no webhook
+
+Você usa:
+
+x-webhook-secret
+authorization
+
+
+Segundo PushinPay docs:
+
+O correto é:
+
+X-Token
+
+
+Ou:
+
+Authorization: Bearer SEU_TOKEN
+
+
+Mas PushinPay não envia x-webhook-secret.
+
+→ Seu webhook vai rejeitar TODAS notificações como 401.
+
+4. Você usa "status" errado no webhook
+
+PushinPay envia:
+
+"status": "CONFIRMED"
+
+
+ou dependendo do ambiente:
+
+"status": "paid"
+
+
+Você está esperando:
+
+"paid" ou "pago"
+
+
+Isso vai falhar em produção.
+
+Correção:
+
+if (["paid","pago","confirmed","CONFIRMED"].includes(normalizedStatus))
+
+5. Você não valida o campo "PixCode" retornado pela PushinPay
+
+PushinPay retorna:
+
+qr_code_base64
+qr_code
+emv
+copy_and_paste
+value
+txid
+
+
+Seu código assume:
+
+pixData.qr_code
+pixData.qr_code_base64
+
+
+Isso pode não existir dependendo do modelo de PIX.
+
+⚠️ PROBLEMAS MODERADOS
+6. Falta sanitização de amount no POST
+
+Se enviar string, sistema quebra.
+
+7. Falta verificação do formato do webhook
+
+PushinPay envia payload assim:
+
+{
+ id: "xxxx",
+ status: "CONFIRMED",
+ value: 3500,
+ transaction: {...}
+}
+
+
+Seu codigo espera:
+
+{ status, id }
+
+
+Funciona, mas pode falhar se estrutura tiver nested.
+
+8. A URL do webhook pode ficar undefined
+
+Você usa:
+
+const webhookUrl = process.env.REPLIT_DEV_DOMAIN
+
+
+Se não existir, webhook NÃO funciona.
+
+9. Falta revalidação de pagamento já processado
+
+Você colocou, mas no lugar errado.
+
+10. Você não atualiza o status no cliente após pagamento
+
+Está atualizando no banco, mas não empurra ao front.

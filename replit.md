@@ -184,7 +184,12 @@ Preferred communication style: Simple, everyday language.
   - `PUSHINPAY_TOKEN`: API authentication token
   - `PUSHINPAY_ACCOUNT_ID`: Account identifier
   - `PUSHINPAY_PIX_KEY`: PIX key for receiving payments
+  - `PUSHINPAY_WEBHOOK_SECRET`: Secret token for webhook authentication (configured in PushinPay admin panel as custom header)
   - `USE_PUSHINPAY_DEMO` (optional): Set to "true" to force demo mode
+- **Webhook Security**:
+  - Webhooks are authenticated using `PUSHINPAY_WEBHOOK_SECRET`
+  - PushinPay sends custom header `X-Webhook-Secret` or `Authorization` header
+  - Requests without valid secret are rejected with 401 Unauthorized
 
 ### Database Services
 

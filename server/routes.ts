@@ -1,6 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import session from "express-session";
+import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { storage } from "./storage";
 import { insertUserSchema, insertCredentialSchema, insertPaymentSchema } from "@shared/schema";
@@ -30,6 +31,13 @@ const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // SECURITY: Validate webhook secret at startup (fail fast)
+  const webhookSecret = process.env.PUSHINPAY_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    console.warn("⚠️  WARNING: PUSHINPAY_WEBHOOK_SECRET not configured - webhook authentication will be disabled!");
+    console.warn("⚠️  This is a security risk in production. Set PUSHINPAY_WEBHOOK_SECRET environment variable.");
+  }
+
   // Trust proxy for production (behind Replit's HTTPS proxy)
   if (process.env.NODE_ENV === "production") {
     app.set('trust proxy', 1);
@@ -351,13 +359,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Valor inválido" });
       }
 
+      // Sanitize amount input (CRITICAL: prevent string/invalid values)
+      const sanitizedAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      
+      if (isNaN(sanitizedAmount) || sanitizedAmount <= 0) {
+        return res.status(400).json({ error: "Valor inválido" });
+      }
+
       // PushinPay requires minimum value of 50 centavos (R$ 0.50)
-      const amountInCents = Math.round(amount * 100);
+      const amountInCents = Math.round(sanitizedAmount * 100);
       if (amountInCents < 50) {
         return res.status(400).json({ 
           error: "Valor mínimo permitido é R$ 0,50 (50 centavos)"
         });
       }
+
+      // CRITICAL: Generate our own TXID (UUID) to send to PushinPay
+      const ourTxid = crypto.randomUUID();
 
       // Check if demo mode is enabled (auto-enable on API failure)
       const useDemoMode = process.env.USE_PUSHINPAY_DEMO === "true";
@@ -367,40 +385,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (useDemoMode) {
         // DEMO MODE: Generate fake PIX for testing
-        console.log(`[DEMO MODE] Generating fake PIX for R$${amount}`);
-        
-        const demoTxid = `DEMO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        console.log(`[DEMO MODE] Generating fake PIX for R$${sanitizedAmount} (txid: ${ourTxid})`);
         
         // Generate a simple demo QR code (base64 encoded 1x1 pixel)
         const demoQrCodeBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
         
         pixData = {
-          id: demoTxid,
+          txid: ourTxid,
+          id: ourTxid, // For compatibility
           qr_code: "00020101021126580014br.gov.bcb.pix0136demo-pix-code-for-testing-only5204000053039865802BR5925DEMO PUSHINPAY TESTING6009SAO PAULO62070503***6304ABCD",
           qr_code_base64: demoQrCodeBase64,
           status: "created",
-          value: Math.round(amount * 100)
+          value: amountInCents
         };
         
-        console.log(`[DEMO MODE] Created demo payment with txid: ${demoTxid}`);
+        console.log(`[DEMO MODE] Created demo payment with our txid: ${ourTxid}`);
       } else {
         apiAttempted = true;
         // PRODUCTION MODE: Call real PushinPay API
         const pushinpayToken = process.env.PUSHINPAY_TOKEN;
-        const webhookUrl = process.env.REPLIT_DEV_DOMAIN 
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`
-          : undefined;
+        
+        // CRITICAL: Ensure webhook URL is properly configured
+        let webhookUrl: string | undefined = undefined;
+        if (process.env.REPLIT_DEV_DOMAIN) {
+          webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`;
+        } else {
+          console.warn("⚠️  REPLIT_DEV_DOMAIN not set - webhook notifications will not work!");
+        }
 
         if (!pushinpayToken) {
           console.error("PUSHINPAY_TOKEN not configured");
           return res.status(500).json({ error: "Configuração de pagamento não encontrada" });
         }
 
-        // Convert amount to cents (R$35.00 = 3500)
-        const amountInCents = Math.round(amount * 100);
+        console.log(`Generating PIX for R$${sanitizedAmount} (${amountInCents} cents) with txid: ${ourTxid}`);
 
-        console.log(`Generating PIX for R$${amount} (${amountInCents} cents)`);
-
+        // CRITICAL: Send our own TXID to PushinPay
         const pushinpayResponse = await fetch("https://api.pushinpay.com.br/api/pix/cashIn", {
           method: "POST",
           headers: {
@@ -411,6 +431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           body: JSON.stringify({
             value: amountInCents,
             webhook_url: webhookUrl,
+            txid: ourTxid, // CRITICAL: Send our own TXID
           }),
         });
 
@@ -421,33 +442,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Fallback to DEMO mode if API is unavailable
           console.log("[AUTO DEMO MODE] PushinPay API unavailable, using demo mode");
           
-          const demoTxid = `DEMO-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
           const demoQrCodeBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
           
           pixData = {
-            id: demoTxid,
+            txid: ourTxid,
+            id: ourTxid,
             qr_code: "00020101021126580014br.gov.bcb.pix0136demo-pix-code-for-testing-only5204000053039865802BR5925DEMO PUSHINPAY TESTING6009SAO PAULO62070503***6304ABCD",
             qr_code_base64: demoQrCodeBase64,
             status: "created",
-            value: Math.round(amount * 100)
+            value: amountInCents
           };
           
-          console.log(`[AUTO DEMO MODE] Created demo payment with txid: ${demoTxid}`);
+          console.log(`[AUTO DEMO MODE] Created demo payment with our txid: ${ourTxid}`);
         } else {
           pixData = await pushinpayResponse.json();
-          console.log("PushinPay response:", { id: pixData.id, status: pixData.status });
+          console.log("PushinPay response:", { txid: pixData.txid || ourTxid, status: pixData.status });
+          
+          // CRITICAL: Use our TXID, not PushinPay's internal ID
+          pixData.txid = ourTxid;
         }
       }
 
-      // Create payment record with transaction ID
+      // Create payment record with OUR transaction ID
       const payment = await storage.createPayment({
         userId: req.session.userId!,
-        amount: amount.toString(),
+        amount: sanitizedAmount.toString(),
         status: "pending",
-        txid: pixData.id,
+        txid: ourTxid, // CRITICAL: Use our own TXID
       });
 
-      console.log(`Payment record created: ${payment.id} with txid: ${pixData.id}`);
+      console.log(`Payment record created: ${payment.id} with our txid: ${ourTxid}`);
 
       // Ensure qr_code_base64 has proper data URI prefix
       let qrCodeBase64 = pixData.qr_code_base64;
@@ -496,25 +520,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       console.log("PushinPay webhook received:", JSON.stringify(req.body, null, 2));
       
-      const { status, id } = req.body;
+      // SECURITY: Verify webhook authenticity using constant-time comparison
+      // CRITICAL: PushinPay sends X-Token header (not x-webhook-secret!)
+      const webhookSecret = process.env.PUSHINPAY_WEBHOOK_SECRET;
       
-      // PushinPay uses 'id' field for transaction ID
-      const txid = id;
+      if (!webhookSecret) {
+        console.error("CRITICAL: PUSHINPAY_WEBHOOK_SECRET not configured");
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       
-      if (!txid) {
-        console.error("Webhook missing transaction ID");
+      // CRITICAL: PushinPay uses X-Token header or Authorization Bearer
+      const receivedToken = req.headers['x-token'] as string | undefined;
+      const receivedAuth = req.headers['authorization'] as string | undefined;
+      
+      if (!receivedToken && !receivedAuth) {
+        console.error("Webhook authentication failed - missing X-Token or Authorization header");
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      // Normalize received secret (trim whitespace)
+      const normalizedReceived = (receivedToken || receivedAuth || '').trim();
+      
+      // Prepare expected values
+      const expectedDirect = webhookSecret.trim();
+      const expectedBearer = `Bearer ${webhookSecret.trim()}`;
+      
+      // Use constant-time comparison to prevent timing attacks
+      let isValid = false;
+      try {
+        // Compare with direct secret (X-Token)
+        if (normalizedReceived.length === expectedDirect.length) {
+          const receivedBuf = Buffer.from(normalizedReceived, 'utf8');
+          const expectedBuf = Buffer.from(expectedDirect, 'utf8');
+          isValid = crypto.timingSafeEqual(receivedBuf, expectedBuf);
+        }
+        
+        // Compare with Bearer format (Authorization)
+        if (!isValid && normalizedReceived.length === expectedBearer.length) {
+          const receivedBuf = Buffer.from(normalizedReceived, 'utf8');
+          const expectedBuf = Buffer.from(expectedBearer, 'utf8');
+          isValid = crypto.timingSafeEqual(receivedBuf, expectedBuf);
+        }
+      } catch (error) {
+        // timingSafeEqual throws if buffer lengths don't match
+        isValid = false;
+      }
+      
+      if (!isValid) {
+        console.error("Webhook authentication failed - invalid secret");
+        return res.status(401).json({ error: "Unauthorized" });
+      }
+      
+      // CRITICAL: PushinPay may send nested transaction object
+      const { status, id, transaction, txid } = req.body;
+      
+      // CRITICAL: Extract TXID from multiple possible locations
+      const receivedTxid = txid || id || transaction?.txid || transaction?.id;
+      
+      if (!receivedTxid) {
+        console.error("Webhook missing transaction ID", req.body);
         return res.status(400).json({ error: "Missing transaction ID" });
       }
       
       // Normalize status to lowercase for comparison
       const normalizedStatus = status?.toLowerCase();
       
-      // PushinPay status: "created" | "paid" | "canceled"
-      if (normalizedStatus === "paid" || normalizedStatus === "pago") {
-        const payment = await storage.getPaymentByTxid(txid);
+      // CRITICAL: PushinPay uses CONFIRMED status (not just "paid")
+      // Possible statuses: "created" | "paid" | "pago" | "confirmed" | "CONFIRMED" | "canceled"
+      if (normalizedStatus === "paid" || normalizedStatus === "pago" || 
+          normalizedStatus === "confirmed") {
+        const payment = await storage.getPaymentByTxid(receivedTxid);
         
         if (!payment) {
-          console.error(`Payment not found for txid: ${txid}`);
+          console.error(`Payment not found for txid: ${receivedTxid}`);
           // Return 200 to prevent PushinPay retries for unknown transactions
           return res.json({ success: true, message: "Payment not found" });
         }
@@ -525,7 +603,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.json({ success: true, message: "Already processed" });
         }
         
-        console.log(`Payment confirmed for txid: ${txid}, user: ${payment.userId}`);
+        console.log(`Payment confirmed for txid: ${receivedTxid}, user: ${payment.userId}`);
         
         // Update payment status
         await storage.updatePayment(payment.id, { status: "paid" });
@@ -541,7 +619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ success: true, message: "Payment processed" });
       } else if (normalizedStatus === "canceled" || normalizedStatus === "cancelled" || normalizedStatus === "failed") {
         // Handle both PushinPay's "canceled" (1 L) and potential "cancelled" (2 Ls) variants
-        const payment = await storage.getPaymentByTxid(txid);
+        const payment = await storage.getPaymentByTxid(receivedTxid);
         
         if (payment && payment.status !== "failed") {
           console.log(`Payment ${payment.id} marked as failed/canceled`);
@@ -551,10 +629,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ success: true, message: "Payment failed/canceled" });
       } else if (normalizedStatus === "created") {
         // Payment created, waiting for payment - no action needed
-        console.log(`Payment created (pending): ${txid}`);
+        console.log(`Payment created (pending): ${receivedTxid}`);
         res.json({ success: true, message: "Payment created" });
       } else {
-        console.log(`Unhandled payment status: ${status}`);
+        console.log(`Unhandled payment status: ${status} for txid: ${receivedTxid}`);
         res.json({ success: true, message: "Status noted" });
       }
     } catch (error) {
