@@ -35,7 +35,19 @@ export default function UserFormDialog({ open, onClose, onSubmit, user }: UserFo
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ email, password, status });
+    
+    let submitData;
+    if (user) {
+      // When editing: only send password if it's not empty, always send status
+      submitData = password.trim() 
+        ? { password, status }
+        : { status };
+    } else {
+      // When creating: send all fields
+      submitData = { email, password, status };
+    }
+    
+    onSubmit(submitData);
     onClose();
   };
 
@@ -50,18 +62,20 @@ export default function UserFormDialog({ open, onClose, onSubmit, user }: UserFo
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="usuario@example.com"
-              required
-              data-testid="input-user-email"
-            />
-          </div>
+          {!user && (
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="usuario@example.com"
+                required
+                data-testid="input-user-email"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="password">Senha {user && "(deixe em branco para manter)"}</Label>

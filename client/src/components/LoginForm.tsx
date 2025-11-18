@@ -3,20 +3,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Mail } from "lucide-react";
+import { Lock, Mail, MessageCircle } from "lucide-react";
 
 interface LoginFormProps {
   title: string;
   description?: string;
   onSubmit: (email: string, password: string) => void;
   showForgotPassword?: boolean;
+  whatsappMessage?: string;
 }
 
 export default function LoginForm({ 
   title, 
   description, 
   onSubmit, 
-  showForgotPassword = false 
+  showForgotPassword = false,
+  whatsappMessage
 }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -80,7 +82,7 @@ export default function LoginForm({
             </Button>
 
             {showForgotPassword && (
-              <div className="text-center">
+              <div className="text-center space-y-3">
                 <a
                   href="https://wa.me/5544936184613?text=Esqueci%20meu%20acesso%20e%20desejo%20alterar"
                   target="_blank"
@@ -90,6 +92,25 @@ export default function LoginForm({
                 >
                   Esqueceu sua senha?
                 </a>
+                
+                {whatsappMessage && (
+                  <Button
+                    type="button"
+                    variant="default"
+                    asChild
+                    className="w-full gap-2"
+                    data-testid="button-whatsapp"
+                  >
+                    <a
+                      href={`https://wa.me/5544936184613?text=${encodeURIComponent(whatsappMessage)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Contato via WhatsApp
+                    </a>
+                  </Button>
+                )}
               </div>
             )}
           </form>
