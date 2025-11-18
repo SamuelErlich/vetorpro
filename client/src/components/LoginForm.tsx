@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Mail, MessageCircle, Shapes } from "lucide-react";
+import { Lock, Mail, MessageCircle, Sparkles } from "lucide-react";
 
 interface LoginFormProps {
   title: string;
@@ -33,8 +33,12 @@ export default function LoginForm({
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-3 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Shapes className="h-8 w-8 text-primary" />
-            <span className="text-2xl font-bold text-foreground">VectorPro</span>
+            <div className="bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg p-1.5 flex items-center justify-center">
+              <Sparkles className="h-5 w-5 text-white" />
+            </div>
+            <span className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+              VectorPro
+            </span>
           </div>
           <CardTitle className="text-3xl font-semibold">{title}</CardTitle>
           {description && (
