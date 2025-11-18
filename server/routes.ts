@@ -351,6 +351,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Valor inválido" });
       }
 
+      // PushinPay requires minimum value of 50 centavos (R$ 0.50)
+      const amountInCents = Math.round(amount * 100);
+      if (amountInCents < 50) {
+        return res.status(400).json({ 
+          error: "Valor mínimo permitido é R$ 0,50 (50 centavos)"
+        });
+      }
+
       // Check if demo mode is enabled (auto-enable on API failure)
       const useDemoMode = process.env.USE_PUSHINPAY_DEMO === "true";
       
@@ -501,6 +509,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Normalize status to lowercase for comparison
       const normalizedStatus = status?.toLowerCase();
       
+      // PushinPay status: "created" | "paid" | "canceled"
       if (normalizedStatus === "paid" || normalizedStatus === "pago") {
         const payment = await storage.getPaymentByTxid(txid);
         
@@ -530,15 +539,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`User ${payment.userId} activated successfully`);
         
         res.json({ success: true, message: "Payment processed" });
-      } else if (normalizedStatus === "failed" || normalizedStatus === "cancelled") {
+      } else if (normalizedStatus === "canceled" || normalizedStatus === "cancelled" || normalizedStatus === "failed") {
+        // Handle both PushinPay's "canceled" (1 L) and potential "cancelled" (2 Ls) variants
         const payment = await storage.getPaymentByTxid(txid);
         
         if (payment && payment.status !== "failed") {
-          console.log(`Payment ${payment.id} marked as failed`);
+          console.log(`Payment ${payment.id} marked as failed/canceled`);
           await storage.updatePayment(payment.id, { status: "failed" });
         }
         
-        res.json({ success: true, message: "Payment failed" });
+        res.json({ success: true, message: "Payment failed/canceled" });
+      } else if (normalizedStatus === "created") {
+        // Payment created, waiting for payment - no action needed
+        console.log(`Payment created (pending): ${txid}`);
+        res.json({ success: true, message: "Payment created" });
       } else {
         console.log(`Unhandled payment status: ${status}`);
         res.json({ success: true, message: "Status noted" });
