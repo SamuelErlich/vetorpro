@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Mail, MessageCircle } from "lucide-react";
+import { Lock, Mail, MessageCircle, Shapes } from "lucide-react";
 
 interface LoginFormProps {
   title: string;
@@ -31,7 +31,11 @@ export default function LoginForm({
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
-        <CardHeader className="space-y-2 text-center">
+        <CardHeader className="space-y-3 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Shapes className="h-8 w-8 text-primary" />
+            <span className="text-2xl font-bold text-foreground">VectorPro</span>
+          </div>
           <CardTitle className="text-3xl font-semibold">{title}</CardTitle>
           {description && (
             <CardDescription className="text-base">{description}</CardDescription>
