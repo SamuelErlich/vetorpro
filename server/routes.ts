@@ -78,37 +78,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { email, password } = req.body;
       
-      console.log("Admin login attempt:", email);
-      
       const user = await storage.getUserByEmail(email);
-      console.log("User found:", !!user);
-      
-      if (!user) {
-        console.log("User not found");
-        return res.status(401).json({ error: "Credenciais inválidas" });
-      }
-      
-      console.log("User isAdmin:", user.isAdmin, "Type:", typeof user.isAdmin);
-      console.log("isAdmin check:", user.isAdmin !== "true");
-      
-      if (user.isAdmin !== "true") {
-        console.log("User is not admin");
+      if (!user || user.isAdmin !== "true") {
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 
-      console.log("Comparing password...");
       const validPassword = await bcrypt.compare(password, user.password);
-      console.log("Password valid:", validPassword);
-      
       if (!validPassword) {
-        console.log("Invalid password");
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 
       req.session.userId = user.id;
       req.session.isAdmin = true;
 
-      console.log("Admin login successful");
       const { password: _, ...userWithoutPassword } = user;
       res.json({ user: userWithoutPassword });
     } catch (error) {
