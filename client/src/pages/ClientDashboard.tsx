@@ -12,6 +12,7 @@ import type { User as UserType, Credential, Payment } from "@shared/schema";
 
 type AuthMeResponse = { user: UserType };
 type CredentialsResponse = { credentials: Credential[]; locked: boolean };
+type PaymentResponse = Omit<Payment, 'createdAt'> & { createdAt: string };
 
 export default function ClientDashboard() {
   const [, setLocation] = useLocation();
@@ -28,7 +29,7 @@ export default function ClientDashboard() {
   });
 
   // Get payments
-  const { data: paymentsData, isLoading: paymentsLoading } = useQuery<Payment[]>({
+  const { data: paymentsData, isLoading: paymentsLoading } = useQuery<PaymentResponse[]>({
     queryKey: ['/api/payments'],
   });
 
