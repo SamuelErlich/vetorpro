@@ -339,9 +339,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Acesso negado" });
       }
 
+      // Format cents to reais for UI display
+      const amountInReais = typeof payment.amount === 'number' 
+        ? (payment.amount / 100).toFixed(2)
+        : payment.amount;
+
       res.json({ 
         status: payment.status,
-        amount: payment.amount,
+        amount: amountInReais, // Return formatted reais for UI
+        amountCents: payment.amount, // Also return raw cents
         createdAt: payment.createdAt,
       });
     } catch (error) {
@@ -355,11 +361,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { amount } = req.body;
       
-      if (!amount || typeof amount !== 'number' || amount <= 0) {
+      // CRITICAL: Accept both number and string (frontend may send either)
+      if (amount == null || amount === '') {
         return res.status(400).json({ error: "Valor inválido" });
       }
 
-      // Sanitize amount input (CRITICAL: prevent string/invalid values)
+      // Sanitize amount input (CRITICAL: convert string to number if needed)
       const sanitizedAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
       
       if (isNaN(sanitizedAmount) || sanitizedAmount <= 0) {
@@ -456,22 +463,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.log(`[AUTO DEMO MODE] Created demo payment with our txid: ${ourTxid}`);
         } else {
           pixData = await pushinpayResponse.json();
-          console.log("PushinPay response:", { txid: pixData.txid || ourTxid, status: pixData.status });
+          console.log("PushinPay response:", { pushinpayId: pixData.id, status: pixData.status });
           
-          // CRITICAL: Use our TXID, not PushinPay's internal ID
+          // CRITICAL: Overwrite ALL identifier fields with our TXID
+          // This ensures consistency across client, database, and webhook
           pixData.txid = ourTxid;
+          pixData.id = ourTxid;
         }
       }
 
-      // Create payment record with OUR transaction ID
+      // Create payment record with OUR transaction ID (amount in cents)
       const payment = await storage.createPayment({
         userId: req.session.userId!,
-        amount: sanitizedAmount.toString(),
+        amount: amountInCents, // Store cents as integer for precise monetary math
         status: "pending",
         txid: ourTxid, // CRITICAL: Use our own TXID
       });
 
-      console.log(`Payment record created: ${payment.id} with our txid: ${ourTxid}`);
+      console.log(`Payment record created: ${payment.id} with our txid: ${ourTxid}, amount: ${amountInCents} cents (R$${sanitizedAmount})`);
 
       // Ensure qr_code_base64 has proper data URI prefix
       let qrCodeBase64 = pixData.qr_code_base64;
@@ -479,12 +488,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
       }
 
+      // CRITICAL: Return OUR TXID to the client (not PushinPay's internal ID)
+      // This ensures client polling uses the same TXID we stored in database
+      // Return amount in reais (formatted) for UI display
       res.json({
         qrCodeBase64: qrCodeBase64,
         qrCode: pixData.qr_code,
-        txid: pixData.id,
+        txid: ourTxid, // CRITICAL: Return our TXID, not pixData.id
         status: pixData.status,
-        amount: amount,
+        amount: sanitizedAmount, // Return original reais for UI
+        amountCents: amountInCents, // Also provide cents for reference
       });
     } catch (error) {
       console.error("Generate PIX error:", error);
@@ -572,10 +585,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // CRITICAL: PushinPay may send nested transaction object
-      const { status, id, transaction, txid } = req.body;
+      // SECURITY: Only trust txid from body root, ignore nested IDs to prevent forgery
+      const { status, txid } = req.body;
       
-      // CRITICAL: Extract TXID from multiple possible locations
-      const receivedTxid = txid || id || transaction?.txid || transaction?.id;
+      // CRITICAL: Extract TXID only from root level (not from nested transaction)
+      const receivedTxid = txid;
       
       if (!receivedTxid) {
         console.error("Webhook missing transaction ID", req.body);

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -22,7 +22,7 @@ export const credentials = pgTable("credentials", {
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  amount: decimal("amount").notNull(),
+  amount: integer("amount").notNull(), // Amount in cents (centavos) for precise monetary math
   status: text("status").notNull().default("pending"),
   txid: text("txid"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
