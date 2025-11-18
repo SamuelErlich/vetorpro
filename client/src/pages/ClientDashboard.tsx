@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, MessageCircle } from "lucide-react";
 import CredentialsCard from "@/components/CredentialsCard";
 import PaymentStatusBanner from "@/components/PaymentStatusBanner";
 import PaymentCalendar from "@/components/PaymentCalendar";
@@ -177,6 +177,24 @@ export default function ClientDashboard() {
           <PaymentCalendar payments={formattedPayments} />
         ) : null}
       </main>
+
+      {/* WhatsApp Support Button - Dashboard */}
+      <Button
+        size="lg"
+        asChild
+        className="fixed bottom-6 left-6 z-50 h-14 w-14 rounded-full shadow-lg hover:shadow-xl transition-all bg-[#25D366] hover:bg-[#20BA5A] text-white border-0"
+        data-testid="button-whatsapp-support"
+      >
+        <a
+          href="https://wa.me/5544936184613?text=Preciso%20de%20ajuda%20com%20meu%20acesso"
+          target="_blank"
+          rel="noopener noreferrer"
+          data-testid="link-whatsapp-support"
+        >
+          <MessageCircle className="h-6 w-6" />
+          <span className="sr-only">Suporte via WhatsApp</span>
+        </a>
+      </Button>
     </div>
   );
 }

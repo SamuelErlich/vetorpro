@@ -56,7 +56,7 @@ export default function ClientLogin() {
         showForgotPassword={true}
       />
       
-      {/* WhatsApp Contact Button */}
+      {/* WhatsApp Contact Button - Login Page */}
       <Button
         size="lg"
         asChild
@@ -64,7 +64,7 @@ export default function ClientLogin() {
         data-testid="button-whatsapp"
       >
         <a
-          href="https://wa.me/5544936184613"
+          href="https://wa.me/5544936184613?text=Preciso%20de%20acesso%20ao%20vectorizer"
           target="_blank"
           rel="noopener noreferrer"
           data-testid="link-whatsapp"

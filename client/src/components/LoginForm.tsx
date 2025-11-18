@@ -81,14 +81,15 @@ export default function LoginForm({
 
             {showForgotPassword && (
               <div className="text-center">
-                <button
-                  type="button"
+                <a
+                  href="https://wa.me/5544936184613?text=Esqueci%20meu%20acesso%20e%20desejo%20alterar"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  onClick={() => console.log('Forgot password clicked')}
                   data-testid="link-forgot-password"
                 >
                   Esqueceu sua senha?
-                </button>
+                </a>
               </div>
             )}
           </form>
