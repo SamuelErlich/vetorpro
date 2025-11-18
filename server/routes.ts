@@ -30,6 +30,11 @@ const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Trust proxy for production (behind Replit's HTTPS proxy)
+  if (process.env.NODE_ENV === "production") {
+    app.set('trust proxy', 1);
+  }
+
   // Session configuration
   app.use(
     session({
@@ -40,6 +45,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
       },
     })
   );
