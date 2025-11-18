@@ -57,9 +57,10 @@ As credenciais criadas ficam imediatamente disponíveis para o usuário correspo
 1. Acesse `/` e faça login com as credenciais do cliente
 2. No dashboard, você verá:
    - Status do pagamento (ATIVO ou INATIVO)
-   - Credenciais do mês atual (se pagamento estiver ativo)
+   - **Apenas a credencial mais recente** (se pagamento estiver ativo)
    - Histórico de pagamentos
 3. Se o pagamento estiver inativo, as credenciais ficam bloqueadas
+4. **Importante**: O cliente vê apenas a credencial atual/mais recente, não todo o histórico
 
 ### 3. Cliente - Realizar Pagamento PIX
 
