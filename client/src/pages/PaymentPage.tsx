@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CheckCircle, Copy, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, Copy, Loader2, Calendar } from "lucide-react";
 
 type PaymentStatusResponse = { 
   status: string;
@@ -24,7 +24,7 @@ export default function PaymentPage() {
     mutationFn: () =>
       apiRequest('/api/payments/pix', {
         method: 'POST',
-        body: JSON.stringify({ amount: 35.00 }),
+        body: JSON.stringify({ amount: 17.50 }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: (data) => {
@@ -122,8 +122,22 @@ export default function PaymentPage() {
           <CardDescription className="text-center">
             Escaneie o QR Code ou copie o código PIX para realizar o pagamento
           </CardDescription>
+          
+          {/* Monthly Plan Information */}
+          <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">
+            <div className="flex items-center justify-center gap-2">
+              <Calendar className="h-4 w-4 text-primary" />
+              <p className="text-center text-sm font-medium text-primary">
+                Plano Mensal: R$ 17,50/mês
+              </p>
+            </div>
+            <p className="text-center text-xs text-muted-foreground mt-1">
+              Acesso liberado imediatamente após confirmação do pagamento
+            </p>
+          </div>
+
           {pixData?.txid && !paymentConfirmed && (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-2">
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground mt-3">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>Aguardando confirmação do pagamento...</span>
             </div>

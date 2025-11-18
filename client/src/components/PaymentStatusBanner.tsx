@@ -1,6 +1,6 @@
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { CheckCircle, AlertCircle, Calendar } from "lucide-react";
+import { CheckCircle, AlertCircle, Calendar, CreditCard } from "lucide-react";
 
 interface PaymentStatusBannerProps {
   status: "ATIVO" | "INATIVO";
@@ -33,6 +33,16 @@ export default function PaymentStatusBanner({
             {isActive ? "Pagamento em Dia" : "Pagamento Pendente"}
           </AlertTitle>
           <AlertDescription className="space-y-1 text-sm">
+            {!isActive && (
+              <div className="mb-2 p-2 bg-background/50 border rounded-md">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-primary" />
+                  <p className="font-semibold text-foreground">
+                    Valor da Mensalidade: <span className="text-primary">R$ 17,50</span>
+                  </p>
+                </div>
+              </div>
+            )}
             {lastPayment && (
               <div className="flex items-center gap-2">
                 <Calendar className="h-4 w-4" />
