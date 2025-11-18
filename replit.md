@@ -139,21 +139,26 @@ Preferred communication style: Simple, everyday language.
 
 **PIX Generation Flow**:
 1. Client initiates payment from dashboard
-2. POST to `/api/payments/pix` with amount (1750 cents = R$ 17,50)
-3. Backend calls PushinPay API (POST https://api.pushinpay.com.br/pix)
-4. Returns QR code image and "copia e cola" string
-5. Payment record created with "pending" status
+2. POST to `/api/payments/pix` with amount (accepts number or string, e.g., "17.50")
+3. Backend sanitizes input and generates own TXID (UUID via crypto.randomUUID())
+4. Backend calls PushinPay API with: `{ value: 1750, txid: ownTxid, webhook_url }`
+5. Backend stores payment in database with amount in CENTS (integer: 1750 = R$17.50)
+6. Returns to client: `{ txid: ownTxid, qrCode, qrCodeBase64, amount, amountCents }`
+7. Client polls `/api/payments/status/:txid` using returned TXID
 
 **Demo Mode Fallback**:
 - Automatically activates when PushinPay API is unavailable or returns errors
 - Generates demo QR code and PIX "copia e cola" for testing
-- Controlled by USE_PUSHINPAY_DEMO environment variable (optional)
+- Controlled by USE_PUSHINPAY_WEBHOOK_SECRET environment variable (optional)
 - Ensures uninterrupted payment testing during development
 
-**Webhook Handling**:
-- Token-based validation for incoming webhook requests
-- Payment status updates upon confirmation
-- User status updates (ATIVO/INATIVO) based on payment
+**Webhook Handling (SECURITY HARDENED)**:
+- **Authentication**: X-Token header validation using crypto.timingSafeEqual (constant-time comparison)
+- **TXID Validation**: Only accepts root-level `txid` field (ignores nested transaction.id to prevent forgery)
+- **Status Handling**: Accepts "paid", "pago", "confirmed" (case-insensitive)
+- **Idempotency**: Checks if payment already processed before updating
+- **User Activation**: Updates user.status to "ATIVO" and sets ultimoPagamento timestamp
+- **Amount Storage**: All amounts stored as INTEGER centavos for precise monetary math (no float drift)
 
 **UI Enhancements**:
 - Payment banner displays monthly subscription value (R$ 17,50) with CreditCard icon
@@ -167,29 +172,35 @@ Preferred communication style: Simple, everyday language.
 **PushinPay API**: PIX payment generation service
 - **Production Endpoint**: POST https://api.pushinpay.com.br/api/pix/cashIn
 - **Sandbox Endpoint**: POST https://api-sandbox.pushinpay.com.br/api/pix/cashIn
-- **Authentication**: Authorization header with token (format: `54639|MadF7cQylFYos8sV1pPAevPjztPGwIBIqYxUaxsz7e7ee90a`)
-- **Account ID**: `9F0D8FDB-A19B-4C47-9F6C-968FECC0D2A1` (used for split_rules if needed)
+- **Authentication**: Authorization header with Bearer token
 - **Request Parameters**:
   - `value` (required): Payment amount in cents (e.g., 1750 = R$17.50)
+  - `txid` (required): Our own UUID generated via crypto.randomUUID() for tracking
   - `webhook_url` (optional): URL to receive payment status updates
   - `split_rules` (optional): Array for revenue sharing between accounts
 - **Response Fields**:
-  - `id`: Transaction UUID
+  - `id`: PushinPay's internal ID (we overwrite this with our txid for consistency)
   - `qr_code`: PIX "Copia e Cola" copy-paste string
-  - `qr_code_base64`: Base64-encoded QR code image (data:image/png;base64,...)
-  - `status`: Transaction status (created, paid, failed)
+  - `qr_code_base64`: Base64-encoded QR code image (may need data URI prefix added)
+  - `status`: Transaction status ("created", "paid", "confirmed", "canceled")
   - `value`: Amount in cents
-- **Webhook**: Automatic POST to webhook_url on payment status change (3 retry attempts)
+- **Webhook Payload**:
+  - Sent as POST to webhook_url on payment status change
+  - Contains: `{ txid, status, ... }` at root level
+  - May include nested `transaction` object (ignored for security)
+  - Status values: "created", "paid", "confirmed", "canceled"
 - **Environment Variables**:
-  - `PUSHINPAY_TOKEN`: API authentication token
-  - `PUSHINPAY_ACCOUNT_ID`: Account identifier
-  - `PUSHINPAY_PIX_KEY`: PIX key for receiving payments
-  - `PUSHINPAY_WEBHOOK_SECRET`: Secret token for webhook authentication (configured in PushinPay admin panel as custom header)
+  - `PUSHINPAY_TOKEN`: API authentication token (Bearer format)
+  - `PUSHINPAY_WEBHOOK_SECRET`: Secret token for webhook authentication via X-Token header
+  - `REPLIT_DEV_DOMAIN`: Used to construct webhook URL (warns if not set)
   - `USE_PUSHINPAY_DEMO` (optional): Set to "true" to force demo mode
-- **Webhook Security**:
-  - Webhooks are authenticated using `PUSHINPAY_WEBHOOK_SECRET`
-  - PushinPay sends custom header `X-Webhook-Secret` or `Authorization` header
-  - Requests without valid secret are rejected with 401 Unauthorized
+- **Webhook Security (CRITICAL)**:
+  - Webhooks authenticated using `PUSHINPAY_WEBHOOK_SECRET` with constant-time comparison
+  - PushinPay sends `X-Token` header (not x-webhook-secret!)
+  - Also accepts `Authorization: Bearer <secret>` as fallback
+  - Uses crypto.timingSafeEqual to prevent timing attacks
+  - Only trusts root-level `txid` field (ignores nested transaction.id to prevent forgery)
+  - Requests without valid secret rejected with 401 Unauthorized
 
 ### Database Services
 
