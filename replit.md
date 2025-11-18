@@ -109,17 +109,30 @@ Preferred communication style: Simple, everyday language.
 
 ### Payment Integration
 
+**Monthly Subscription**: R$ 17,50/month
+
 **PIX Generation Flow**:
 1. Client initiates payment from dashboard
-2. POST to `/api/payments/pix` with amount
+2. POST to `/api/payments/pix` with amount (1750 cents = R$ 17,50)
 3. Backend calls PushinPay API (POST https://api.pushinpay.com.br/pix)
 4. Returns QR code image and "copia e cola" string
 5. Payment record created with "pending" status
+
+**Demo Mode Fallback**:
+- Automatically activates when PushinPay API is unavailable or returns errors
+- Generates demo QR code and PIX "copia e cola" for testing
+- Controlled by USE_PUSHINPAY_DEMO environment variable (optional)
+- Ensures uninterrupted payment testing during development
 
 **Webhook Handling**:
 - Token-based validation for incoming webhook requests
 - Payment status updates upon confirmation
 - User status updates (ATIVO/INATIVO) based on payment
+
+**UI Enhancements**:
+- Payment banner displays monthly subscription value (R$ 17,50) with CreditCard icon
+- Payment page highlights "Plano Mensal: R$ 17,50/mês" with Calendar icon
+- Icons from lucide-react library for consistent design
 
 ## External Dependencies
 
@@ -131,7 +144,7 @@ Preferred communication style: Simple, everyday language.
 - **Authentication**: Authorization header with token (format: `54639|MadF7cQylFYos8sV1pPAevPjztPGwIBIqYxUaxsz7e7ee90a`)
 - **Account ID**: `9F0D8FDB-A19B-4C47-9F6C-968FECC0D2A1` (used for split_rules if needed)
 - **Request Parameters**:
-  - `value` (required): Payment amount in cents (e.g., 3500 = R$35.00)
+  - `value` (required): Payment amount in cents (e.g., 1750 = R$17.50)
   - `webhook_url` (optional): URL to receive payment status updates
   - `split_rules` (optional): Array for revenue sharing between accounts
 - **Response Fields**:
@@ -145,6 +158,7 @@ Preferred communication style: Simple, everyday language.
   - `PUSHINPAY_TOKEN`: API authentication token
   - `PUSHINPAY_ACCOUNT_ID`: Account identifier
   - `PUSHINPAY_PIX_KEY`: PIX key for receiving payments
+  - `USE_PUSHINPAY_DEMO` (optional): Set to "true" to force demo mode
 
 ### Database Services
 
