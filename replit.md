@@ -32,7 +32,20 @@ The system supports a **monthly subscription of R$ 17,50**. It integrates with t
 
 ### Email Notification System
 
-**Resend** is used for automated payment reminders and account status notifications. Email templates include "Payment due tomorrow," "Payment due today," and "Access blocked," all branded and with WhatsApp contact. A `users.nextPaymentDate` field tracks payment due dates. Cron jobs (scheduled for Day 4, 5, and 6 relative to `nextPaymentDate` in America/Sao_Paulo timezone) trigger these notifications and block overdue users. Admin testing endpoints are available for emails and cron jobs. The system is designed for graceful degradation if `RESEND_API_KEY` is not configured or if cron jobs fail.
+**Resend** is used for automated payment reminders and account status notifications. Email templates include "Payment due in 2 days," "Payment due tomorrow," and "Access blocked," all branded with VectorPro and WhatsApp contact (5544936184613). 
+
+**Standardized Billing Cycle:** All payments are due on **DAY 5 of each month**. When a user pays, their `nextPaymentDate` is automatically set to day 5 of the following month (not +30 days from payment). This creates a consistent, predictable billing cycle for all customers.
+
+**Cron Schedule** (America/Sao_Paulo timezone):
+- **Day 3 at 9:00 AM**: Pre-reminder emails ("Payment due in 2 days")
+- **Day 4 at 9:00 AM**: Final warning emails ("Payment due tomorrow - day 5")
+- **Day 6 at 9:00 AM**: Block overdue users + send "Access blocked" emails (1 day grace period)
+
+Admin testing endpoints are available:
+- `POST /api/admin/test-email` - Manual email testing
+- `POST /api/admin/trigger-cron` - Manual cron trigger (actions: day3, day4, day6)
+
+The system is designed for graceful degradation: works without `RESEND_API_KEY` (logs warnings), cron failures don't crash the server. Requires Always-On/Reserved VM for 24/7 cron execution.
 
 ## External Dependencies
 
