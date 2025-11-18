@@ -15,11 +15,18 @@ Preferred communication style: Simple, everyday language.
 **Framework**: React with TypeScript, using Vite as the build tool
 
 **Routing**: Wouter for client-side routing with the following structure:
-- `/` - Client login page
-- `/dashboard` - Client dashboard (protected)
+- `/` - Client login page (with WhatsApp contact button)
+- `/dashboard` - Client dashboard (protected, with WhatsApp support button)
 - `/admin/login` - Admin login page
 - `/admin` - Admin dashboard (protected)
 - `/payment` - PIX payment generation page
+
+**WhatsApp Integration**: Context-aware floating contact buttons
+- Login page (unauthenticated): "Preciso de acesso ao vectorizer"
+- Dashboard (authenticated): "Preciso de ajuda com meu acesso"
+- Forgot password link: "Esqueci meu acesso e desejo alterar"
+- Contact number: +55 44 93618-4613
+- Fixed positioning: bottom-left corner, green WhatsApp branding (#25D366)
 
 **State Management**: TanStack Query (React Query) for server state management with custom query client configuration. Session data is managed server-side with cookies.
 
@@ -83,6 +90,11 @@ Preferred communication style: Simple, everyday language.
    - userId (foreign key to users)
    - month (text, e.g., "Janeiro 2025")
    - data (JSON string containing credential details)
+   
+   **Client View Filtering**: 
+   - "ChaveAPI" field is filtered out from client view (case-insensitive exact match)
+   - Only displays: Usuario, Senha (and other non-ChaveAPI fields)
+   - Admin retains full access to all credential fields
 
 3. **Payments Table**:
    - id (UUID, primary key)
