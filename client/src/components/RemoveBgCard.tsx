@@ -12,7 +12,8 @@ import {
   Eye, 
   Download,
   Sparkles,
-  Clock
+  Clock,
+  Info
 } from "lucide-react";
 import { useRemoveBgCredits, useRemoveBgUsage } from "@/hooks/useRemoveBg";
 import RemoveBgUploadModal from "./RemoveBgUploadModal";
@@ -210,16 +211,6 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
                 <div className="aspect-video rounded-lg bg-muted animate-pulse" />
               ) : lastProcessed ? (
                 <div className="space-y-4">
-                  {/* Last Processed Image Preview */}
-                  <BeforeAfterSlider
-                    beforeImage={lastProcessed.originalImagePath || ""}
-                    afterImage={lastProcessed.imagePath || ""}
-                    beforeLabel="Original"
-                    afterLabel="Sem Fundo"
-                    className="w-full"
-                    aspectRatio="video"
-                  />
-                  
                   {/* Image Info */}
                   <Card className="p-3">
                     <div className="flex items-center justify-between">
@@ -241,27 +232,36 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
                   {/* Quick Actions */}
                   <div className="flex gap-2">
                     <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedImage(lastProcessed);
-                        setImageModalOpen(true);
-                      }}
-                      data-testid="button-view-fullsize"
+                      onClick={() => setHistoryModalOpen(true)}
+                      className="flex-1"
+                      data-testid="button-view-history-recent"
                     >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Ver Ampliado
+                      <Clock className="h-4 w-4 mr-2" />
+                      Ver Histórico Completo
                     </Button>
                     <Button
+                      onClick={() => setUploadModalOpen(true)}
                       variant="outline"
-                      size="sm"
-                      onClick={() => handleDownload(lastProcessed.imagePath!, "processed")}
-                      data-testid="button-download-recent"
+                      className="flex-1"
+                      data-testid="button-process-another"
                     >
-                      <Download className="h-4 w-4 mr-2" />
-                      Baixar
+                      <Upload className="h-4 w-4 mr-2" />
+                      Processar Nova Imagem
                     </Button>
                   </div>
+
+                  {/* Info Note */}
+                  <Card className="p-3 bg-muted/50">
+                    <div className="flex gap-2">
+                      <Info className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-xs font-medium">Dica</p>
+                        <p className="text-xs text-muted-foreground">
+                          Acesse o histórico completo para visualizar e baixar todas as suas imagens processadas com comparação lado a lado.
+                        </p>
+                      </div>
+                    </div>
+                  </Card>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
