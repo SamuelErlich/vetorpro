@@ -510,6 +510,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========== VECTORIZER AUTO-LOGIN ROUTES ==========
+  
+  // Auto-login to Vectorizer via SSO
+  app.get("/api/vectorizer/autologin", requireAuth, async (req, res) => {
+    try {
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
+      // Check if user is ATIVO
+      if (user.status !== "ATIVO") {
+        return res.status(403).json({ 
+          success: false, 
+          error: "Acesso bloqueado. Pagamento pendente." 
+        });
+      }
+
+      // Get shared credentials (most recent)
+      const credentials = await storage.getSharedCredentials();
+      
+      if (credentials.length === 0) {
+        return res.status(404).json({ 
+          success: false, 
+          error: "Nenhuma credencial disponível" 
+        });
+      }
+
+      // Get the most recent credential (last in array)
+      const latestCredential = credentials[credentials.length - 1];
+
+      // Parse credential data
+      let email: string;
+      try {
+        const data = JSON.parse(latestCredential.data);
+        email = data.usuario || data.email;
+        
+        if (!email) {
+          return res.status(400).json({ 
+            success: false, 
+            error: "Email não encontrado nas credenciais" 
+          });
+        }
+      } catch (error) {
+        return res.status(400).json({ 
+          success: false, 
+          error: "Erro ao processar credenciais" 
+        });
+      }
+
+      // Build Vectorizer SSO URL
+      const loginUrl = `https://cedarlakeventures.com/signon/v0/we54b154ba3adfa5e/single?lc=en-US&loginPath=%2Flogin_callback%3Fredir%3D%252F%253Fsignin%253D1&email=${encodeURIComponent(email)}`;
+
+      res.json({ 
+        success: true, 
+        url: loginUrl 
+      });
+    } catch (error) {
+      console.error("Vectorizer auto-login error:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: "Erro ao gerar link de acesso" 
+      });
+    }
+  });
+
   // ========== PAYMENT ROUTES ==========
   
   // Get user's payments
