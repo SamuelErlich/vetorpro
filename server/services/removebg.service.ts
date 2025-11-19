@@ -204,6 +204,24 @@ export class RemoveBgService {
     // Get the API key from database/cache
     const apiKey = await this.getApiKey();
     
+    // Check user image limit (30 images maximum per user)
+    const userUsageHistory = await storage.getRemoveBgUsageByUserId(userId);
+    const imageCount = userUsageHistory.length;
+    
+    if (imageCount >= 30) {
+      // Clean up the oldest images to maintain the 30-image limit
+      const toDelete = userUsageHistory
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .slice(0, imageCount - 29); // Keep only the most recent 29 images
+      
+      for (const record of toDelete) {
+        await this.deleteImages(record.originalImagePath, record.imagePath);
+        await storage.deleteRemoveBgUsageById(record.id);
+      }
+      
+      console.log(`🧹 Cleaned up ${toDelete.length} old image(s) for user ${userId} to maintain 30-image limit`);
+    }
+    
     // Get image resolution
     const resolutionMp = await this.getImageResolution(imageBuffer);
     
