@@ -4,6 +4,7 @@ import { removeBgService } from "../services/removebg.service";
 import { storage } from "../storage";
 
 const router = Router();
+const REMOVEBG_SERVICE_ID = "removebg-001";
 
 // Configure multer for file uploads
 const upload = multer({
@@ -29,11 +30,48 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+// Middleware to check if user has active RemoveBG service
+const requireRemoveBgService = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Não autenticado" });
+  }
+  
+  try {
+    // Check if user is active
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ error: "Usuário não encontrado" });
+    }
+    
+    if (user.status !== "ATIVO") {
+      return res.status(403).json({ 
+        error: "Acesso negado. Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
+        inactive: true,
+        status: user.status
+      });
+    }
+    
+    // Check if user has active RemoveBG service
+    const userService = await storage.getUserService(req.session.userId, REMOVEBG_SERVICE_ID);
+    if (!userService || userService.status !== "ATIVO") {
+      return res.status(403).json({ 
+        error: "Acesso negado. Você não tem uma assinatura ativa do RemoveBG.",
+        serviceInactive: true
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error("Error checking RemoveBG service status:", error);
+    return res.status(500).json({ error: "Erro ao verificar status do serviço" });
+  }
+};
+
 /**
  * POST /api/removebg/process
  * Upload and process image to remove background
  */
-router.post("/process", requireAuth, upload.single("image"), async (req: Request, res: Response) => {
+router.post("/process", requireRemoveBgService, upload.single("image"), async (req: Request, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No image file provided" });
@@ -74,7 +112,7 @@ router.post("/process", requireAuth, upload.single("image"), async (req: Request
  * GET /api/removebg/usage
  * Get user's RemoveBG usage history
  */
-router.get("/usage", requireAuth, async (req: Request, res: Response) => {
+router.get("/usage", requireRemoveBgService, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
     const usage = await removeBgService.getUserUsageHistory(userId);
@@ -95,7 +133,7 @@ router.get("/usage", requireAuth, async (req: Request, res: Response) => {
  * GET /api/removebg/credits
  * Get user's available RemoveBG credits
  */
-router.get("/credits", requireAuth, async (req: Request, res: Response) => {
+router.get("/credits", requireRemoveBgService, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
     const credits = await removeBgService.getUserCredits(userId);
@@ -165,7 +203,7 @@ router.post("/estimate", requireAuth, upload.single("image"), async (req: Reques
  * DELETE /api/removebg/usage/:id
  * Delete a single RemoveBG usage record and its images
  */
-router.delete("/usage/:id", requireAuth, async (req: Request, res: Response) => {
+router.delete("/usage/:id", requireRemoveBgService, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
     const usageId = req.params.id;
@@ -201,7 +239,7 @@ router.delete("/usage/:id", requireAuth, async (req: Request, res: Response) => 
  * DELETE /api/removebg/usage/batch
  * Delete multiple RemoveBG usage records and their images
  */
-router.delete("/usage/batch", requireAuth, async (req: Request, res: Response) => {
+router.delete("/usage/batch", requireRemoveBgService, async (req: Request, res: Response) => {
   try {
     const userId = req.session.userId!;
     const { ids } = req.body;

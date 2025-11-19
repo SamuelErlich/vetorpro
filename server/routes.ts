@@ -67,6 +67,36 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+// Enhanced middleware to check if user is authenticated AND active
+const requireActiveAuth = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Não autenticado" });
+  }
+  
+  try {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      return res.status(401).json({ error: "Usuário não encontrado" });
+    }
+    
+    // Check if user status is ATIVO
+    if (user.status !== "ATIVO") {
+      // Log them out if inactive
+      req.session.destroy(() => {});
+      return res.status(403).json({ 
+        error: "Acesso negado. Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
+        inactive: true,
+        status: user.status 
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error("Error checking user status:", error);
+    return res.status(500).json({ error: "Erro ao verificar status do usuário" });
+  }
+};
+
 // Middleware to check if user is admin
 const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.session.userId || !req.session.isAdmin) {
@@ -139,6 +169,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 
+      // Check if user account is active
+      if (user.status !== "ATIVO") {
+        console.log(`❌ Login blocked for ${email} - Status: ${user.status}`);
+        return res.status(403).json({ 
+          error: "Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
+          inactive: true,
+          status: user.status
+        });
+      }
+
       req.session.userId = user.id;
       req.session.isAdmin = user.isAdmin === "true";
 
@@ -195,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Get current user
+  // Get current user  
   app.get("/api/auth/me", requireAuth, async (req, res) => {
     try {
       const user = await storage.getUser(req.session.userId!);
@@ -203,6 +243,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Usuário não encontrado" });
       }
 
+      // Note: We allow both ATIVO and INATIVO users to get their info
+      // but we include the status in the response so the frontend can handle appropriately
       const { password: _, ...userWithoutPassword } = user;
       res.json({ user: userWithoutPassword });
     } catch (error) {
@@ -788,7 +830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CREDENTIAL ROUTES ==========
   
   // Get user's credentials (only if payment is active)
-  app.get("/api/credentials", requireAuth, async (req, res) => {
+  app.get("/api/credentials", requireActiveAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const user = await storage.getUser(userId);
