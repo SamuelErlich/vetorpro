@@ -1640,7 +1640,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin: Delete payment (only pending payments)
+  // Admin: Delete payment (only pending or failed payments)
   app.delete("/api/admin/payments/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
@@ -1651,10 +1651,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Pagamento não encontrado" });
       }
 
-      // Only allow deletion of pending payments
-      if (payment.status !== "pending") {
+      // Only allow deletion of pending or failed payments
+      if (payment.status !== "pending" && payment.status !== "failed") {
         return res.status(400).json({ 
-          error: "Apenas pagamentos pendentes podem ser excluídos" 
+          error: "Apenas pagamentos pendentes ou falhados podem ser excluídos" 
         });
       }
 
