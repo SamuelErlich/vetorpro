@@ -2,6 +2,7 @@ import { services, userServices, payments, credentials, users } from "@shared/sc
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
+import { DEFAULT_SERVICE_ID } from "@shared/constants";
 
 /**
  * Migration para adicionar suporte a múltiplos serviços
@@ -15,8 +16,6 @@ import { neon } from "@neondatabase/serverless";
  * Nota: Esta migration é idempotente e pode ser executada múltiplas vezes sem efeitos colaterais
  */
 
-const VECTORIZER_SERVICE_ID = "vectorizer-001"; // ID fixo para o serviço Vectorizer
-
 export async function runMultiServiceMigration() {
   try {
     console.log("🚀 [MIGRATION] Iniciando migração para suporte multi-serviço...");
@@ -26,7 +25,7 @@ export async function runMultiServiceMigration() {
     const db = drizzle(sqlClient);
 
     // Passo 1: Verificar se o serviço Vectorizer já existe
-    const existingServices = await db.select().from(services).where(eq(services.id, VECTORIZER_SERVICE_ID));
+    const existingServices = await db.select().from(services).where(eq(services.id, DEFAULT_SERVICE_ID));
     let vectorizerService = existingServices[0];
 
     if (!vectorizerService) {
@@ -34,7 +33,7 @@ export async function runMultiServiceMigration() {
       
       // Inserir serviço Vectorizer
       const [newService] = await db.insert(services).values({
-        id: VECTORIZER_SERVICE_ID,
+        id: DEFAULT_SERVICE_ID,
         nome: "Vectorizer",
         descricao: "Serviço de vetorização de imagens",
         preco: "17.50",
@@ -51,7 +50,7 @@ export async function runMultiServiceMigration() {
     console.log("💰 [MIGRATION] Atualizando pagamentos existentes...");
     const updatePaymentsResult = await db.execute(sql`
       UPDATE payments 
-      SET service_id = ${VECTORIZER_SERVICE_ID}
+      SET service_id = ${DEFAULT_SERVICE_ID}
       WHERE service_id IS NULL
     `);
     console.log(`✅ [MIGRATION] Pagamentos atualizados: ${updatePaymentsResult.rowCount || 0}`);
@@ -60,7 +59,7 @@ export async function runMultiServiceMigration() {
     console.log("🔑 [MIGRATION] Atualizando credenciais existentes...");
     const updateCredentialsResult = await db.execute(sql`
       UPDATE credentials 
-      SET service_id = ${VECTORIZER_SERVICE_ID}
+      SET service_id = ${DEFAULT_SERVICE_ID}
       WHERE service_id IS NULL
     `);
     console.log(`✅ [MIGRATION] Credenciais atualizadas: ${updateCredentialsResult.rowCount || 0}`);
@@ -74,14 +73,14 @@ export async function runMultiServiceMigration() {
     for (const user of allUsers) {
       // Verificar se já existe uma assinatura para este usuário
       const existingSubscriptions = await db.select().from(userServices).where(
-        sql`${userServices.userId} = ${user.id} AND ${userServices.serviceId} = ${VECTORIZER_SERVICE_ID}`
+        sql`${userServices.userId} = ${user.id} AND ${userServices.serviceId} = ${DEFAULT_SERVICE_ID}`
       );
 
       if (existingSubscriptions.length === 0) {
         // Criar assinatura baseada no status atual do usuário
         await db.insert(userServices).values({
           userId: user.id,
-          serviceId: VECTORIZER_SERVICE_ID,
+          serviceId: DEFAULT_SERVICE_ID,
           status: user.status, // Copiar status atual do usuário
           ultimoPagamento: user.ultimoPagamento,
           proximoPagamento: user.nextPaymentDate,
@@ -95,7 +94,7 @@ export async function runMultiServiceMigration() {
 
     return {
       success: true,
-      serviceId: VECTORIZER_SERVICE_ID,
+      serviceId: DEFAULT_SERVICE_ID,
       usersProcessed: allUsers.length,
     };
 

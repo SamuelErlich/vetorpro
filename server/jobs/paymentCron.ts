@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { storage } from '../storage';
 import { sendEmail, emailTemplates } from '../utils/email';
+import { DEFAULT_SERVICE_ID } from '@shared/constants';
 
 /**
  * Payment Monitoring Cron Jobs
@@ -77,7 +78,7 @@ async function sendPaymentPreReminderEmails() {
   
   try {
     // Get all active UserServices for vectorizer-001
-    const userServices = await storage.getUserServicesByServiceId('vectorizer-001');
+    const userServices = await storage.getUserServicesByServiceId(DEFAULT_SERVICE_ID);
     const activeUserServices = userServices.filter(us => us.status === 'ATIVO');
     
     console.log(`   Found ${activeUserServices.length} active user services to check`);
@@ -130,7 +131,7 @@ async function sendPaymentFinalWarningEmails() {
   
   try {
     // Get all active UserServices for vectorizer-001
-    const userServices = await storage.getUserServicesByServiceId('vectorizer-001');
+    const userServices = await storage.getUserServicesByServiceId(DEFAULT_SERVICE_ID);
     const activeUserServices = userServices.filter(us => us.status === 'ATIVO');
     
     console.log(`   Found ${activeUserServices.length} active user services to check`);
@@ -183,7 +184,7 @@ async function blockOverdueUsers() {
   
   try {
     // Get all active UserServices for vectorizer-001
-    const userServices = await storage.getUserServicesByServiceId('vectorizer-001');
+    const userServices = await storage.getUserServicesByServiceId(DEFAULT_SERVICE_ID);
     const activeUserServices = userServices.filter(us => us.status === 'ATIVO');
     
     console.log(`   Found ${activeUserServices.length} active user services to check`);

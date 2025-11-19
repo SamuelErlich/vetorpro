@@ -8,6 +8,7 @@ import { storage } from "./storage";
 import { insertUserSchema, insertCredentialSchema, insertPaymentSchema } from "@shared/schema";
 import { manualTriggers } from "./jobs/paymentCron";
 import { sendEmail, emailTemplates } from "./utils/email";
+import { DEFAULT_SERVICE_ID } from "@shared/constants";
 
 // Extend session data
 declare module 'express-session' {
@@ -567,7 +568,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Set default serviceId if not provided
       const credentialData = {
         ...validatedData,
-        serviceId: validatedData.serviceId || "vectorizer-001"
+        serviceId: validatedData.serviceId || DEFAULT_SERVICE_ID
       };
       const credential = await storage.createCredential(credentialData);
       res.status(201).json(credential);
@@ -852,7 +853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create payment record with OUR transaction ID (amount in cents as string)
       const payment = await storage.createPayment({
         userId: req.session.userId!,
-        serviceId: "vectorizer-001", // Default service for all payments
+        serviceId: DEFAULT_SERVICE_ID, // Default service for all payments
         amount: amountInCents.toString(), // Store cents as string (decimal column)
         status: "pending",
         txid: ourTxid, // CRITICAL: Use our own TXID
@@ -1069,7 +1070,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create payment record with PAID status
       const payment = await storage.createPayment({
         userId,
-        serviceId: "vectorizer-001", // Default service for all payments
+        serviceId: DEFAULT_SERVICE_ID, // Default service for all payments
         amount: amount.toString(),
         status: "paid",
         txid: `SIMULATED-${Date.now()}`,
@@ -1089,7 +1090,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Also update or create UserService for vectorizer-001
-      const serviceId = payment.serviceId || "vectorizer-001";
+      const serviceId = payment.serviceId || DEFAULT_SERVICE_ID;
       const existingUserService = await storage.getUserService(userId, serviceId);
       
       if (existingUserService) {
@@ -1282,7 +1283,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Also update or create UserService for vectorizer-001
-        const serviceId = payment.serviceId || "vectorizer-001"; // Use payment's serviceId or default
+        const serviceId = payment.serviceId || DEFAULT_SERVICE_ID; // Use payment's serviceId or default
         const existingUserService = await storage.getUserService(payment.userId, serviceId);
         
         if (existingUserService) {
