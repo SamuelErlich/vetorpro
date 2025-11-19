@@ -41,11 +41,6 @@ const paymentsRateLimiter = rateLimit({
   legacyHeaders: false,
   // Skip rate limiting in test/development environments
   skip: (req) => process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test',
-  // Properly handle trust proxy setting for Replit
-  keyGenerator: (req) => {
-    // Use X-Forwarded-For header when behind proxy (Replit)
-    return req.ip || req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown';
-  },
 });
 
 const webhookRateLimiter = rateLimit({
@@ -2367,6 +2362,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== REMOVEBG ROUTES ==========
   app.use("/api/removebg", removeBgRoutes);
+  
+  // RemoveBG API Token Management Routes (Admin only)
+  app.get("/api/admin/removebg-tokens", requireAdmin, async (req, res) => {
+    try {
+      const tokens = await storage.listRemoveBgApiKeys();
+      // Mask API keys for security - only show last 4 characters
+      const maskedTokens = tokens.map(token => ({
+        ...token,
+        maskedApiKey: token.apiKeyEncrypted ? `****${token.apiKeyEncrypted.slice(-4)}` : '****',
+        apiKeyEncrypted: undefined, // Don't send encrypted key to frontend
+      }));
+      res.json(maskedTokens);
+    } catch (error) {
+      console.error("Error fetching RemoveBG tokens:", error);
+      res.status(500).json({ error: "Erro ao buscar tokens" });
+    }
+  });
+
+  app.post("/api/admin/removebg-tokens", requireAdmin, async (req, res) => {
+    try {
+      const { label, apiKey } = req.body;
+
+      if (!label || !apiKey) {
+        return res.status(400).json({ error: "Label e API Key são obrigatórios" });
+      }
+
+      // Encrypt the API key before storing
+      const { encrypt } = await import("./utils/crypto");
+      const encryptedKey = encrypt(apiKey);
+
+      const newToken = await storage.createRemoveBgApiKey({
+        label,
+        apiKeyEncrypted: encryptedKey,
+        isActive: false,
+        createdBy: req.session.userId!,
+      });
+
+      // Return token without the encrypted key
+      const maskedToken = {
+        ...newToken,
+        maskedApiKey: `****${apiKey.slice(-4)}`,
+        apiKeyEncrypted: undefined,
+      };
+
+      res.json(maskedToken);
+    } catch (error) {
+      console.error("Error creating RemoveBG token:", error);
+      res.status(500).json({ error: "Erro ao criar token" });
+    }
+  });
+
+  app.put("/api/admin/removebg-tokens/:id/activate", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const activatedToken = await storage.activateRemoveBgApiKey(id);
+      if (!activatedToken) {
+        return res.status(404).json({ error: "Token não encontrado" });
+      }
+
+      // Return token without the encrypted key
+      const maskedToken = {
+        ...activatedToken,
+        maskedApiKey: activatedToken.apiKeyEncrypted ? `****${activatedToken.apiKeyEncrypted.slice(-4)}` : '****',
+        apiKeyEncrypted: undefined,
+      };
+
+      res.json(maskedToken);
+    } catch (error) {
+      console.error("Error activating RemoveBG token:", error);
+      res.status(500).json({ error: "Erro ao ativar token" });
+    }
+  });
+
+  app.delete("/api/admin/removebg-tokens/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const success = await storage.deleteRemoveBgApiKey(id);
+      if (!success) {
+        return res.status(404).json({ error: "Token não encontrado" });
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting RemoveBG token:", error);
+      res.status(500).json({ error: "Erro ao remover token" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;

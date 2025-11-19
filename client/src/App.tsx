@@ -7,6 +7,7 @@ import { queryClient } from "@/lib/queryClient";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminLogin from "@/pages/AdminLogin";
 import AdminServiceDetails from "@/pages/AdminServiceDetails";
+import AdminRemoveBgTokens from "@/pages/AdminRemoveBgTokens";
 import ClientDashboard from "@/pages/ClientDashboard";
 import ClientLogin from "@/pages/ClientLogin";
 import RemoveBgPlans from "@/pages/RemoveBgPlans";
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/dashboard" component={ClientDashboard} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/services/:serviceId" component={AdminServiceDetails} />
+      <Route path="/admin/removebg-tokens" component={AdminRemoveBgTokens} />
       <Route path="/payment" component={PaymentPage} />
       <Route path="/removebg/plans" component={RemoveBgPlans} />
       <Route path="/criar-senha" component={CriarSenha} />

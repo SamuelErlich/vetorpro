@@ -477,6 +477,14 @@ export default function AdminDashboard() {
                 <div className="space-y-8">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-2xl font-bold">Gerenciar RemoveBG</h2>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => setLocation('/admin/removebg-tokens')}
+                      data-testid="button-manage-tokens"
+                    >
+                      <Key className="h-4 w-4 mr-2" />
+                      Gerenciar Tokens de API
+                    </Button>
                   </div>
 
                   <Tabs value={removeBgTab} onValueChange={setRemoveBgTab}>

@@ -277,6 +277,7 @@ export class MemStorage implements IStorage {
       status: insertUserService.status || "INATIVO",
       ultimoPagamento: insertUserService.ultimoPagamento ?? null,
       proximoPagamento: insertUserService.proximoPagamento ?? null,
+      creditsAvailable: insertUserService.creditsAvailable ?? null,
       createdAt: new Date(),
     };
     this.userServices.set(id, userService);
@@ -518,7 +519,9 @@ export class MemStorage implements IStorage {
     const userService = Array.from(this.userServices.values()).find(
       (us) => us.userId === userId && us.serviceId === serviceId,
     );
-    if (!userService || userService.creditsAvailable < creditsToDebit) return false;
+    if (!userService || userService.creditsAvailable === null || userService.creditsAvailable < creditsToDebit) {
+      return false;
+    }
     
     const updatedService = { ...userService, creditsAvailable: userService.creditsAvailable - creditsToDebit };
     this.userServices.set(userService.id, updatedService);
@@ -550,7 +553,7 @@ export class MemStorage implements IStorage {
     if (!apiKey) return undefined;
 
     // Deactivate all other keys
-    for (const key of this.removeBgApiKeys.values()) {
+    for (const key of Array.from(this.removeBgApiKeys.values())) {
       if (key.id !== id) {
         key.isActive = false;
       }
@@ -881,7 +884,7 @@ class PostgresStorage implements IStorage {
         eq(userServices.serviceId, serviceId)
       ));
     
-    if (!currentUserService[0] || currentUserService[0].creditsAvailable < creditsToDebit) {
+    if (!currentUserService[0] || currentUserService[0].creditsAvailable === null || currentUserService[0].creditsAvailable < creditsToDebit) {
       return false;
     }
 
