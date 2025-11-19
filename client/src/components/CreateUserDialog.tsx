@@ -20,6 +20,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import {
   Select,
@@ -30,12 +31,26 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Mail } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Loader2, Mail, Eye, EyeOff, UserPlus } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const createUserSchema = z.object({
   email: z.string().email("Email inválido"),
   status: z.enum(["ATIVO", "PENDENTE", "INATIVO"]),
+  sendEmail: z.boolean().default(true),
+  password: z.string().optional(),
+}).refine((data) => {
+  if (!data.sendEmail && !data.password) {
+    return false;
+  }
+  if (!data.sendEmail && data.password && data.password.length < 6) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Senha é obrigatória quando o envio de email está desativado (mínimo 6 caracteres)",
+  path: ["password"],
 });
 
 type CreateUserFormData = z.infer<typeof createUserSchema>;
@@ -48,14 +63,19 @@ interface CreateUserDialogProps {
 export default function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) {
   const { toast } = useToast();
   const [emailSent, setEmailSent] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<CreateUserFormData>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
       email: "",
       status: "PENDENTE",
+      sendEmail: true,
+      password: "",
     },
   });
+
+  const watchSendEmail = form.watch("sendEmail");
 
   const createUserMutation = useMutation({
     mutationFn: async (data: CreateUserFormData) => {
@@ -67,19 +87,26 @@ export default function CreateUserDialog({ open, onOpenChange }: CreateUserDialo
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
       
-      setEmailSent(response.emailSent);
+      const sendEmail = form.getValues('sendEmail');
       
-      if (response.emailSent) {
+      if (sendEmail && response.emailSent) {
         toast({
           title: "Usuário criado com sucesso!",
           description: `Um email foi enviado para ${form.getValues('email')} com instruções para criar a senha.`,
         });
-      } else {
+        setEmailSent(true);
+      } else if (sendEmail && !response.emailSent) {
         toast({
           title: "Usuário criado (email não enviado)",
           description: response.warning || "Configure RESEND_API_KEY para enviar emails.",
           variant: "default",
+        });
+      } else {
+        toast({
+          title: "Usuário criado com sucesso!",
+          description: `Usuário ${form.getValues('email')} criado com senha definida manualmente.`,
         });
       }
 
@@ -87,6 +114,7 @@ export default function CreateUserDialog({ open, onOpenChange }: CreateUserDialo
       setTimeout(() => {
         onOpenChange(false);
         setEmailSent(false);
+        setShowPassword(false);
       }, 2000);
     },
     onError: (error: any) => {
@@ -107,11 +135,11 @@ export default function CreateUserDialog({ open, onOpenChange }: CreateUserDialo
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5" />
-            Criar Usuário e Enviar Acesso
+            <UserPlus className="h-5 w-5" />
+            Criar Novo Usuário
           </DialogTitle>
           <DialogDescription>
-            Crie um novo usuário e envie automaticamente um email para ele criar a senha.
+            Crie um novo usuário com email de convite ou senha manual.
           </DialogDescription>
         </DialogHeader>
 
@@ -167,12 +195,75 @@ export default function CreateUserDialog({ open, onOpenChange }: CreateUserDialo
                 )}
               />
 
-              <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
-                <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                <AlertDescription className="text-sm text-blue-700 dark:text-blue-300">
-                  Um email será enviado automaticamente para o usuário com um link válido por 24 horas para criar a senha.
-                </AlertDescription>
-              </Alert>
+              <FormField
+                control={form.control}
+                name="sendEmail"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        data-testid="checkbox-send-email"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>
+                        Enviar email de convite
+                      </FormLabel>
+                      <FormDescription>
+                        Se marcado, um email será enviado para o usuário criar sua própria senha.
+                        Desmarque para definir a senha manualmente.
+                      </FormDescription>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              {!watchSendEmail && (
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Senha *</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <Input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Mínimo 6 caracteres"
+                            data-testid="input-user-password"
+                            {...field}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full px-3"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? (
+                              <EyeOff className="h-4 w-4" />
+                            ) : (
+                              <Eye className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {watchSendEmail && (
+                <Alert className="bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800">
+                  <Mail className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                  <AlertDescription className="text-sm text-blue-700 dark:text-blue-300">
+                    Um email será enviado automaticamente para o usuário com um link válido por 24 horas para criar a senha.
+                  </AlertDescription>
+                </Alert>
+              )}
 
               <DialogFooter>
                 <Button
@@ -194,10 +285,15 @@ export default function CreateUserDialog({ open, onOpenChange }: CreateUserDialo
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Criando...
                     </>
-                  ) : (
+                  ) : watchSendEmail ? (
                     <>
                       <Mail className="mr-2 h-4 w-4" />
                       Criar e Enviar Email
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Criar Usuário
                     </>
                   )}
                 </Button>
