@@ -4,10 +4,77 @@ import sharp from "sharp";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
+import { decrypt } from "../utils/crypto";
 
 const REMOVEBG_SERVICE_ID = "removebg-001";
 
+// Token cache with TTL
+interface TokenCache {
+  token: string;
+  expiresAt: number;
+}
+
+let tokenCache: TokenCache | null = null;
+const TOKEN_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export class RemoveBgService {
+  /**
+   * Get the active RemoveBG API token
+   * Uses cache to avoid frequent database calls
+   * Falls back to environment variable if no database token exists
+   * @returns API key or throws error if none available
+   */
+  private async getApiKey(): Promise<string> {
+    // Check if we have a valid cached token
+    if (tokenCache && tokenCache.expiresAt > Date.now()) {
+      return tokenCache.token;
+    }
+
+    try {
+      // Get active API key from database
+      const activeKey = await storage.getActiveRemoveBgApiKey();
+      
+      if (activeKey) {
+        // Decrypt the API key
+        const decryptedKey = decrypt(activeKey.apiKeyEncrypted);
+        
+        // Update cache
+        tokenCache = {
+          token: decryptedKey,
+          expiresAt: Date.now() + TOKEN_CACHE_TTL
+        };
+        
+        // Update last used timestamp (fire and forget)
+        storage.activateRemoveBgApiKey(activeKey.id).catch(err => 
+          console.error("Failed to update lastUsedAt:", err)
+        );
+        
+        return decryptedKey;
+      }
+    } catch (error) {
+      console.error("Error fetching API key from database:", error);
+    }
+    
+    // Fallback to environment variable (for migration period)
+    const envKey = process.env.REMOVE_BG_API_KEY;
+    if (envKey) {
+      // Cache the env key too
+      tokenCache = {
+        token: envKey,
+        expiresAt: Date.now() + TOKEN_CACHE_TTL
+      };
+      return envKey;
+    }
+    
+    throw new Error("No RemoveBG API key configured. Please add an API key in the admin panel.");
+  }
+
+  /**
+   * Invalidate the cached token (call when admin changes active token)
+   */
+  public static invalidateCache(): void {
+    tokenCache = null;
+  }
   /**
    * Calculate credits needed based on image resolution in megapixels
    * @param resolutionMp Megapixels of the image
@@ -121,19 +188,20 @@ export class RemoveBgService {
    * Process a complete RemoveBG request
    * @param userId User ID
    * @param imageBuffer Original image buffer
-   * @param apiKey RemoveBG API key
    * @returns Object with processed image path and usage details
    */
   async processRemoveBgRequest(
     userId: string, 
-    imageBuffer: Buffer, 
-    apiKey: string
+    imageBuffer: Buffer
   ): Promise<{ 
     processedImagePath: string; 
     originalImagePath: string;
     creditsUsed: number; 
     resolutionMp: number;
   }> {
+    // Get the API key from database/cache
+    const apiKey = await this.getApiKey();
+    
     // Get image resolution
     const resolutionMp = await this.getImageResolution(imageBuffer);
     

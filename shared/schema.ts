@@ -84,6 +84,17 @@ export const removeBgPlans = pgTable("removebg_plans", {
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
+// RemoveBG API keys table for secure API key management
+export const removeBgApiKeys = pgTable("removebg_api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  label: text("label").notNull(), // Descriptive name for the token
+  apiKeyEncrypted: text("api_key_encrypted").notNull(), // Encrypted API key
+  isActive: boolean("is_active").notNull().default(false), // Only one can be active
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  lastUsedAt: timestamp("last_used_at"), // Track when last used
+  createdBy: varchar("created_by").notNull().references(() => users.id), // Admin who created it
+});
+
 // Insert schemas
 export const insertServiceSchema = createInsertSchema(services).omit({
   id: true,
@@ -130,6 +141,12 @@ export const insertRemoveBgPlanSchema = createInsertSchema(removeBgPlans).omit({
   createdAt: true,
 });
 
+export const insertRemoveBgApiKeySchema = createInsertSchema(removeBgApiKeys).omit({
+  id: true,
+  createdAt: true,
+  lastUsedAt: true,
+});
+
 // Types
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type Service = typeof services.$inferSelect;
@@ -147,3 +164,5 @@ export type InsertRemoveBgUsage = z.infer<typeof insertRemoveBgUsageSchema>;
 export type RemoveBgUsage = typeof removeBgUsage.$inferSelect;
 export type InsertRemoveBgPlan = z.infer<typeof insertRemoveBgPlanSchema>;
 export type RemoveBgPlan = typeof removeBgPlans.$inferSelect;
+export type InsertRemoveBgApiKey = z.infer<typeof insertRemoveBgApiKeySchema>;
+export type RemoveBgApiKey = typeof removeBgApiKeys.$inferSelect;

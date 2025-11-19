@@ -15,6 +15,8 @@ import {
   type InsertRemoveBgUsage,
   type RemoveBgPlan,
   type InsertRemoveBgPlan,
+  type RemoveBgApiKey,
+  type InsertRemoveBgApiKey,
   users,
   services,
   userServices,
@@ -22,12 +24,14 @@ import {
   payments,
   passwordResets,
   removeBgUsage,
-  removeBgPlans
+  removeBgPlans,
+  removeBgApiKeys
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
 import { eq, isNull, or, like, desc, asc, and, sql } from "drizzle-orm";
+import { encrypt, decrypt, maskApiKey } from "./utils/crypto";
 
 export interface IStorage {
   // Users
@@ -93,6 +97,13 @@ export interface IStorage {
   getUserCredits(userId: string, serviceId: string): Promise<number>;
   updateUserCredits(userId: string, serviceId: string, credits: number): Promise<boolean>;
   debitUserCredits(userId: string, serviceId: string, creditsToDebit: number): Promise<boolean>;
+  
+  // RemoveBG API Key Management
+  listRemoveBgApiKeys(): Promise<RemoveBgApiKey[]>;
+  createRemoveBgApiKey(data: InsertRemoveBgApiKey): Promise<RemoveBgApiKey>;
+  activateRemoveBgApiKey(id: string): Promise<RemoveBgApiKey | undefined>;
+  deleteRemoveBgApiKey(id: string): Promise<boolean>;
+  getActiveRemoveBgApiKey(): Promise<RemoveBgApiKey | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -104,6 +115,7 @@ export class MemStorage implements IStorage {
   private passwordResets: Map<string, PasswordReset>;
   private removeBgUsage: Map<string, RemoveBgUsage>;
   private removeBgPlans: Map<string, RemoveBgPlan>;
+  private removeBgApiKeys: Map<string, RemoveBgApiKey>;
 
   constructor() {
     this.users = new Map();
@@ -114,6 +126,7 @@ export class MemStorage implements IStorage {
     this.passwordResets = new Map();
     this.removeBgUsage = new Map();
     this.removeBgPlans = new Map();
+    this.removeBgApiKeys = new Map();
   }
 
   // Users
@@ -511,6 +524,51 @@ export class MemStorage implements IStorage {
     this.userServices.set(userService.id, updatedService);
     return true;
   }
+
+  // RemoveBG API Key Management
+  async listRemoveBgApiKeys(): Promise<RemoveBgApiKey[]> {
+    return Array.from(this.removeBgApiKeys.values());
+  }
+
+  async createRemoveBgApiKey(data: InsertRemoveBgApiKey): Promise<RemoveBgApiKey> {
+    const id = randomUUID();
+    const apiKey: RemoveBgApiKey = {
+      id,
+      label: data.label,
+      apiKeyEncrypted: data.apiKeyEncrypted,
+      isActive: data.isActive || false,
+      createdAt: new Date(),
+      lastUsedAt: null,
+      createdBy: data.createdBy,
+    };
+    this.removeBgApiKeys.set(id, apiKey);
+    return apiKey;
+  }
+
+  async activateRemoveBgApiKey(id: string): Promise<RemoveBgApiKey | undefined> {
+    const apiKey = this.removeBgApiKeys.get(id);
+    if (!apiKey) return undefined;
+
+    // Deactivate all other keys
+    for (const key of this.removeBgApiKeys.values()) {
+      if (key.id !== id) {
+        key.isActive = false;
+      }
+    }
+
+    // Activate the selected key
+    apiKey.isActive = true;
+    this.removeBgApiKeys.set(id, apiKey);
+    return apiKey;
+  }
+
+  async deleteRemoveBgApiKey(id: string): Promise<boolean> {
+    return this.removeBgApiKeys.delete(id);
+  }
+
+  async getActiveRemoveBgApiKey(): Promise<RemoveBgApiKey | undefined> {
+    return Array.from(this.removeBgApiKeys.values()).find(key => key.isActive);
+  }
 }
 
 // PostgreSQL storage using Drizzle ORM
@@ -835,6 +893,55 @@ class PostgresStorage implements IStorage {
       ))
       .returning();
     return result.length > 0;
+  }
+
+  // RemoveBG API Key Management
+  async listRemoveBgApiKeys(): Promise<RemoveBgApiKey[]> {
+    return await this.db.select().from(removeBgApiKeys)
+      .orderBy(desc(removeBgApiKeys.createdAt));
+  }
+
+  async createRemoveBgApiKey(data: InsertRemoveBgApiKey): Promise<RemoveBgApiKey> {
+    const result = await this.db.insert(removeBgApiKeys).values(data).returning();
+    return result[0];
+  }
+
+  async activateRemoveBgApiKey(id: string): Promise<RemoveBgApiKey | undefined> {
+    // First deactivate all keys
+    await this.db.update(removeBgApiKeys)
+      .set({ isActive: false });
+    
+    // Then activate the selected key
+    const result = await this.db.update(removeBgApiKeys)
+      .set({ isActive: true })
+      .where(eq(removeBgApiKeys.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async deleteRemoveBgApiKey(id: string): Promise<boolean> {
+    const result = await this.db.delete(removeBgApiKeys)
+      .where(eq(removeBgApiKeys.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async getActiveRemoveBgApiKey(): Promise<RemoveBgApiKey | undefined> {
+    const result = await this.db.select().from(removeBgApiKeys)
+      .where(eq(removeBgApiKeys.isActive, true))
+      .limit(1);
+    
+    // Update lastUsedAt if we found an active key
+    if (result[0]) {
+      this.db.update(removeBgApiKeys)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(removeBgApiKeys.id, result[0].id))
+        .execute()
+        .catch(err => console.error("Failed to update lastUsedAt:", err));
+    }
+    
+    return result[0];
   }
 }
 

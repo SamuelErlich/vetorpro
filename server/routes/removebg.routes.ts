@@ -38,19 +38,13 @@ router.post("/process", requireAuth, upload.single("image"), async (req: Request
       return res.status(400).json({ error: "No image file provided" });
     }
 
-    const apiKey = process.env.REMOVE_BG_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: "RemoveBG API key not configured" });
-    }
-
     const userId = req.session.userId!;
     const imageBuffer = req.file.buffer;
 
-    // Process the image
+    // Process the image (API key is now fetched internally)
     const result = await removeBgService.processRemoveBgRequest(
       userId,
-      imageBuffer,
-      apiKey
+      imageBuffer
     );
 
     res.json({
@@ -63,6 +57,10 @@ router.post("/process", requireAuth, upload.single("image"), async (req: Request
     // Check for specific error types
     if (error.message.includes("Insufficient credits")) {
       return res.status(402).json({ error: error.message });
+    }
+    
+    if (error.message.includes("No RemoveBG API key configured")) {
+      return res.status(503).json({ error: error.message });
     }
     
     res.status(500).json({ 
