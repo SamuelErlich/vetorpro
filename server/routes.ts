@@ -169,14 +169,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 
-      // Check if user account is active
-      if (user.status !== "ATIVO") {
-        console.log(`❌ Login blocked for ${email} - Status: ${user.status}`);
+      // Check if user has any active service (multi-service support)
+      const userServices = await storage.getUserServicesByUserId(user.id);
+      const hasActiveService = userServices?.some(us => us.status === "ATIVO") || false;
+      
+      // Allow login if user has at least one active service OR user status is ATIVO
+      if (!hasActiveService && user.status !== "ATIVO") {
+        console.log(`❌ Login blocked for ${email} - User status: ${user.status}, Active services: ${hasActiveService}`);
         return res.status(403).json({ 
           error: "Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
           inactive: true,
           status: user.status
         });
+      }
+      
+      // If user has active service but Users.status is not ATIVO, sync it
+      if (hasActiveService && user.status !== "ATIVO") {
+        console.log(`✅ Syncing user status for ${email} - has active services`);
+        await storage.updateUser(user.id, { status: "ATIVO" });
       }
 
       req.session.userId = user.id;
