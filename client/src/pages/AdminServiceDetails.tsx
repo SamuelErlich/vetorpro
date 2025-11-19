@@ -404,7 +404,7 @@ export default function ServiceDetails() {
                   <div>
                     <Label>Status</Label>
                     {editingService ? (
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 mt-2">
                         <Switch
                           checked={editedService.ativo || false}
                           onCheckedChange={(checked) => setEditedService({ ...editedService, ativo: checked })}
@@ -413,9 +413,11 @@ export default function ServiceDetails() {
                         <Label>{editedService.ativo ? "Ativo" : "Inativo"}</Label>
                       </div>
                     ) : (
-                      <Badge variant={service.ativo ? "default" : "secondary"}>
-                        {service.ativo ? "Ativo" : "Inativo"}
-                      </Badge>
+                      <div className="mt-2">
+                        <Badge variant={service.ativo ? "default" : "secondary"}>
+                          {service.ativo ? "Ativo" : "Inativo"}
+                        </Badge>
+                      </div>
                     )}
                   </div>
                 </div>
