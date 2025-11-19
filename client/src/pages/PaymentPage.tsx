@@ -132,8 +132,24 @@ export default function PaymentPage() {
         <CardHeader>
           <CardTitle className="text-center text-2xl">Pagamento via PIX</CardTitle>
           <CardDescription className="text-center">
-            Escaneie o QR Code ou copie o código PIX para realizar o pagamento
+            {pixData?.isDemoMode && pixData?.maintenanceMessage ? (
+              pixData.maintenanceMessage
+            ) : (
+              "Escaneie o QR Code ou copie o código PIX para realizar o pagamento"
+            )}
           </CardDescription>
+          
+          {/* Demo Mode Warning */}
+          {pixData?.isDemoMode && (
+            <div className="mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+              <p className="text-sm text-yellow-800 dark:text-yellow-200 text-center font-medium">
+                {pixData.maintenanceMessage || "⚠️ Sistema PIX em manutenção"}
+              </p>
+              <p className="text-xs text-yellow-700 dark:text-yellow-300 text-center mt-2">
+                Os pagamentos reais estão temporariamente desabilitados. Entre em contato com o suporte para mais informações.
+              </p>
+            </div>
+          )}
           
           {/* Monthly Plan Information with Discount */}
           <div className="mt-4 p-4 bg-primary/10 border border-primary/20 rounded-lg">

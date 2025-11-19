@@ -340,6 +340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: null, // Will be set by user via email link
         status: "INATIVO", // Not active until password is created
         isAdmin: "false",
+        discount: 0, // Default discount
       });
 
       // Generate secure token for password creation
@@ -738,6 +739,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========== DEBUG ROUTES (Admin only) ==========
+  
+  // Admin: Check server's actual outbound IP address
+  app.get("/api/debug/ip", requireAdmin, async (req, res) => {
+    try {
+      console.log("🔍 [DEBUG] Admin checking server IP address");
+      
+      // Get server's public IP by making a request to an IP checking service
+      const ipCheckServices = [
+        'https://api.ipify.org?format=json',
+        'https://api.my-ip.io/ip.json',
+        'https://ipapi.co/json/',
+      ];
+      
+      let serverIp = null;
+      let serviceUsed = null;
+      
+      // Try multiple services in case one is down
+      for (const service of ipCheckServices) {
+        try {
+          const response = await fetch(service);
+          if (response.ok) {
+            const data = await response.json();
+            serverIp = data.ip || data;
+            serviceUsed = service;
+            break;
+          }
+        } catch (err) {
+          console.warn(`Failed to get IP from ${service}:`, err);
+          continue;
+        }
+      }
+      
+      // Also get local request info
+      const requestIp = req.ip || req.connection.remoteAddress || 'unknown';
+      const forwardedFor = req.headers['x-forwarded-for'] || 'not set';
+      const realIp = req.headers['x-real-ip'] || 'not set';
+      
+      console.log(`✅ [DEBUG] Server IP check completed:
+        - Public IP: ${serverIp}
+        - Request IP: ${requestIp}
+        - X-Forwarded-For: ${forwardedFor}
+        - X-Real-IP: ${realIp}
+        - Service Used: ${serviceUsed}
+        - Environment: ${process.env.NODE_ENV}
+        - Admin User: ${req.session.userId}`);
+      
+      res.json({
+        serverPublicIp: serverIp,
+        requestIp: requestIp,
+        headers: {
+          xForwardedFor: forwardedFor,
+          xRealIp: realIp
+        },
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString(),
+        message: serverIp 
+          ? "Use este IP para autorizar no painel da PushinPay" 
+          : "Não foi possível determinar o IP público do servidor"
+      });
+    } catch (error) {
+      console.error("Debug IP error:", error);
+      res.status(500).json({ error: "Erro ao verificar IP do servidor" });
+    }
+  });
+
   // ========== PAYMENT ROUTES ==========
   
   // Get user's payments (with rate limiting)
@@ -819,14 +886,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Check if demo mode is enabled (auto-enable on API failure)
-      const useDemoMode = process.env.USE_PUSHINPAY_DEMO === "true";
+      // Check if demo mode is explicitly enabled
+      const forceDemo = process.env.USE_PUSHINPAY_DEMO === "true";
       
       let pixData: any;
-      let apiAttempted = false;
+      let isUsingDemoMode = false;
+      let demoReason = "";
       
-      if (useDemoMode) {
-        // DEMO MODE: Generate fake PIX for testing
+      if (forceDemo) {
+        // DEMO MODE FORCED: Use fake PIX for testing/maintenance
+        isUsingDemoMode = true;
+        demoReason = "maintenance";
+        console.log("⚠️  [PIX] Demo mode is enabled via USE_PUSHINPAY_DEMO environment variable");
+      } else {
+        // Try PRODUCTION MODE first
+        const pushinpayToken = process.env.PUSHINPAY_TOKEN;
+        
+        if (!pushinpayToken) {
+          // No token configured - fall back to demo mode
+          isUsingDemoMode = true;
+          demoReason = "no_token";
+          console.error("❌ [PIX] PUSHINPAY_TOKEN not configured - falling back to demo mode");
+        } else {
+          // Try to call real PushinPay API
+          try {
+            // Get server IP for logging
+            let serverIp = "unknown";
+            try {
+              const ipResponse = await fetch('https://api.ipify.org?format=json');
+              if (ipResponse.ok) {
+                const ipData = await ipResponse.json();
+                serverIp = ipData.ip;
+              }
+            } catch (ipErr) {
+              console.warn("Could not determine server IP:", ipErr);
+            }
+            
+            // CRITICAL: Ensure webhook URL is properly configured
+            let webhookUrl: string | undefined = undefined;
+            if (process.env.REPLIT_DEV_DOMAIN) {
+              webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`;
+            }
+
+            // IMPORTANT: Do NOT send our own txid - let PushinPay generate their own
+            const pushinpayResponse = await fetch("https://api.pushinpay.com.br/api/pix/cashIn", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${pushinpayToken}`,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                value: amountInCents,
+                webhook_url: webhookUrl,
+                // NO txid sent - PushinPay will generate their own
+              }),
+            });
+
+            if (!pushinpayResponse.ok) {
+              const errorText = await pushinpayResponse.text();
+              console.error(`❌ [PIX] PushinPay API error (status ${pushinpayResponse.status}):`, errorText);
+              console.error(`❌ [PIX] Server IP that was rejected: ${serverIp}`);
+              
+              // Check for IP authorization error
+              let isIpError = false;
+              let errorMessage = "";
+              
+              try {
+                const errorJson = JSON.parse(errorText);
+                if (errorJson.error && (
+                  errorJson.error.includes("IP não") ||
+                  errorJson.error.includes("IP not") ||
+                  errorJson.error.includes("IP nao") ||
+                  errorJson.error.includes("não autorizado") ||
+                  errorJson.error.includes("not authorized")
+                )) {
+                  isIpError = true;
+                  errorMessage = errorJson.error;
+                }
+              } catch (e) {
+                // Check status codes that typically indicate authorization issues
+                if (pushinpayResponse.status === 401 || pushinpayResponse.status === 403) {
+                  isIpError = true;
+                  errorMessage = `Authorization error (${pushinpayResponse.status})`;
+                }
+              }
+              
+              if (isIpError) {
+                // IP authorization error - automatically fall back to demo mode
+                console.warn(`⚠️  [PIX] IP authorization failed - Server IP ${serverIp} is not whitelisted`);
+                console.warn(`⚠️  [PIX] Falling back to demo mode for user experience`);
+                isUsingDemoMode = true;
+                demoReason = "ip_error";
+              } else {
+                // Other error - don't fall back, return the error
+                let userErrorMessage = "Sistema de pagamento temporariamente indisponível. Tente novamente.";
+                
+                try {
+                  const errorJson = JSON.parse(errorText);
+                  if (errorJson.error) {
+                    console.error(`❌ [PIX] PushinPay error detail: ${errorJson.error}`);
+                  }
+                } catch (e) {
+                  // Keep default error message
+                }
+                
+                return res.status(503).json({ 
+                  error: userErrorMessage,
+                  temporary: true 
+                });
+              }
+            } else {
+              // Success - parse the response
+              pixData = await pushinpayResponse.json();
+              isUsingDemoMode = false;
+              
+              // Log the FULL PushinPay response for debugging
+              console.log("📝 PushinPay API Response (Full):", JSON.stringify(pixData, null, 2));
+              console.log("📝 PushinPay API Response (Key Fields):", {
+                id: pixData.id,
+                txid: pixData.txid,
+                endToEndId: pixData.endToEndId,
+                end_to_end_id: pixData.end_to_end_id,
+                EndToEndId: pixData.EndToEndId,
+                e2e_id: pixData.e2e_id,
+                end2end_id: pixData.end2end_id,
+                transaction_id: pixData.transaction_id,
+                transactionId: pixData.transactionId,
+              });
+            }
+          } catch (apiError) {
+            // Network error or other unexpected error - fall back to demo mode
+            console.error("❌ [PIX] Unexpected error calling PushinPay:", apiError);
+            isUsingDemoMode = true;
+            demoReason = "api_error";
+          }
+        }
+      }
+      
+      // If using demo mode, generate demo PIX data
+      if (isUsingDemoMode) {
+        console.log(`⚠️  [PIX] Using demo mode (reason: ${demoReason})`);
+        
         // Generate a simple demo QR code (base64 encoded 1x1 pixel)
         const demoQrCodeBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
         
@@ -838,75 +1039,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           qr_code: "00020101021126580014br.gov.bcb.pix0136demo-pix-code-for-testing-only5204000053039865802BR5925DEMO PUSHINPAY TESTING6009SAO PAULO62070503***6304ABCD",
           qr_code_base64: demoQrCodeBase64,
           status: "created",
-          value: amountInCents
+          value: amountInCents,
+          isDemoMode: true,
+          demoReason: demoReason
         };
-      } else {
-        apiAttempted = true;
-        // PRODUCTION MODE: Call real PushinPay API
-        const pushinpayToken = process.env.PUSHINPAY_TOKEN;
-        
-        // CRITICAL: Ensure webhook URL is properly configured
-        let webhookUrl: string | undefined = undefined;
-        if (process.env.REPLIT_DEV_DOMAIN) {
-          webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`;
-        }
-
-        if (!pushinpayToken) {
-          console.error("PUSHINPAY_TOKEN not configured");
-          return res.status(500).json({ error: "Configuração de pagamento não encontrada" });
-        }
-
-        // IMPORTANT: Do NOT send our own txid - let PushinPay generate their own
-        const pushinpayResponse = await fetch("https://api.pushinpay.com.br/api/pix/cashIn", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${pushinpayToken}`,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            value: amountInCents,
-            webhook_url: webhookUrl,
-            // NO txid sent - PushinPay will generate their own
-          }),
-        });
-
-        if (!pushinpayResponse.ok) {
-          const errorText = await pushinpayResponse.text();
-          console.error("PushinPay API error:", pushinpayResponse.status, errorText);
-          
-          // Return actual error instead of fallback to demo mode
-          let errorMessage = "Erro ao gerar PIX. Tente novamente.";
-          
-          try {
-            const errorJson = JSON.parse(errorText);
-            if (errorJson.error === "IP não configurado") {
-              errorMessage = "Erro de configuração: IP não autorizado na PushinPay. Entre em contato com o suporte.";
-            } else if (errorJson.error) {
-              errorMessage = `Erro PushinPay: ${errorJson.error}`;
-            }
-          } catch (e) {
-            // Keep default error message
-          }
-          
-          return res.status(500).json({ error: errorMessage });
-        }
-        
-        pixData = await pushinpayResponse.json();
-        
-        // Log the FULL PushinPay response for debugging
-        console.log("📝 PushinPay API Response (Full):", JSON.stringify(pixData, null, 2));
-        console.log("📝 PushinPay API Response (Key Fields):", {
-          id: pixData.id,
-          txid: pixData.txid,
-          endToEndId: pixData.endToEndId,
-          end_to_end_id: pixData.end_to_end_id,
-          EndToEndId: pixData.EndToEndId,
-          e2e_id: pixData.e2e_id,
-          end2end_id: pixData.end2end_id,
-          transaction_id: pixData.transaction_id,
-          transactionId: pixData.transactionId,
-        });
       }
 
       // CRITICAL: Extract the REAL PIX ID from PushinPay response
@@ -960,7 +1096,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
       }
 
-      // Return the REAL PIX ID to the client for polling
+      // Prepare user-friendly message based on demo mode reason
+      let userMessage = null;
+      if (isUsingDemoMode) {
+        switch (demoReason) {
+          case "maintenance":
+            userMessage = "⚠️ Sistema PIX em manutenção. Os pagamentos estão temporariamente desabilitados.";
+            break;
+          case "ip_error":
+            userMessage = "⚠️ PIX temporariamente indisponível devido a manutenção. Nosso time está trabalhando para resolver.";
+            break;
+          case "no_token":
+            userMessage = "⚠️ Sistema de pagamento não configurado. Entre em contato com o suporte.";
+            break;
+          case "api_error":
+            userMessage = "⚠️ Sistema PIX temporariamente indisponível. Tente novamente em alguns minutos.";
+            break;
+          default:
+            userMessage = "⚠️ Sistema PIX em modo de demonstração.";
+        }
+        console.log(`⚠️  [PIX] Demo mode message for user: ${userMessage}`);
+      }
+
+      // Return the PIX data to the client
       res.json({
         qrCodeBase64: qrCodeBase64,
         qrCode: pixData.qr_code,
@@ -971,9 +1129,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         originalAmount: originalAmount, // Original price before discount
         discount: discount, // Discount percentage
         discountAmount: originalAmount - sanitizedAmount, // Amount saved
+        isDemoMode: isUsingDemoMode, // Inform frontend if in demo mode
+        maintenanceMessage: userMessage, // User-friendly message
       });
 
-      console.log(`✅ [PIX Payment] PIX generated successfully - Client will poll with TXID: ${pixTxid}`);
+      console.log(`✅ [PIX Payment] PIX generated ${isUsingDemoMode ? '(DEMO MODE)' : 'successfully'} - Client will poll with TXID: ${pixTxid}`);
     } catch (error) {
       console.error("Generate PIX error:", error);
       res.status(500).json({ error: "Erro ao gerar PIX" });
@@ -1125,6 +1285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         password: null, // Will be set by user via email link
         status: status || "PENDENTE",
         isAdmin: "false",
+        discount: 0, // Default discount
       });
 
       // Generate secure token
