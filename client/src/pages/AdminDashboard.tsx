@@ -349,6 +349,31 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleExportPayments = async () => {
+    try {
+      const res = await fetch("/api/admin/payments/export");
+      if (!res.ok) throw new Error("Erro ao exportar pagamentos");
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `pagamentos-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Pagamentos exportados com sucesso!" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao exportar pagamentos",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -454,14 +479,36 @@ export default function AdminDashboard() {
                   {paymentsLoading ? (
                     <Skeleton className="h-96 w-full" />
                   ) : (
-                    <AdminPaymentTable 
-                      payments={paymentsData?.map((p: any) => ({
-                        ...p,
-                        date: new Date(p.createdAt).toLocaleDateString('pt-BR'),
-                        amount: (parseFloat(p.amount) / 100).toFixed(2).replace('.', ','),
-                      })) || []} 
-                      onDelete={handleDeletePayment}
-                    />
+                    <Card>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <CardTitle>Gerenciar Pagamentos</CardTitle>
+                            <CardDescription>
+                              Visualize e gerencie todos os pagamentos do sistema
+                            </CardDescription>
+                          </div>
+                          <Button 
+                            onClick={handleExportPayments} 
+                            variant="outline" 
+                            data-testid="button-export-payments"
+                          >
+                            <Download className="h-4 w-4 mr-2" />
+                            Exportar para Excel
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <AdminPaymentTable 
+                          payments={paymentsData?.map((p: any) => ({
+                            ...p,
+                            date: new Date(p.createdAt).toLocaleDateString('pt-BR'),
+                            amount: (parseFloat(p.amount) / 100).toFixed(2).replace('.', ','),
+                          })) || []} 
+                          onDelete={handleDeletePayment}
+                        />
+                      </CardContent>
+                    </Card>
                   )}
                 </>
               )}
