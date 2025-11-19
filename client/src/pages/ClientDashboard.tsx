@@ -116,7 +116,7 @@ export default function ClientDashboard() {
       month: new Date(payment.createdAt).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
       status: paymentStatus,
       date: payment.status === 'paid' ? new Date(payment.createdAt).toLocaleDateString('pt-BR') : undefined,
-      amount: parseFloat(payment.amount).toFixed(2).replace('.', ','),
+      amount: (parseFloat(payment.amount) / 100).toFixed(2).replace('.', ','),
     };
   });
 

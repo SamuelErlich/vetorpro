@@ -347,7 +347,7 @@ export default function AdminDashboard() {
                       payments={paymentsData?.map((p: any) => ({
                         ...p,
                         date: new Date(p.createdAt).toLocaleDateString('pt-BR'),
-                        amount: parseFloat(p.amount).toFixed(2).replace('.', ','),
+                        amount: (parseFloat(p.amount) / 100).toFixed(2).replace('.', ','),
                       })) || []} 
                     />
                   )}
