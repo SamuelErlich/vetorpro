@@ -22,7 +22,6 @@ interface User {
 
 interface AdminUserTableProps {
   users: User[];
-  onAdd: () => void;
   onEdit: (userId: string) => void;
   onDelete: (userId: string) => void;
   onEditStatus?: (userId: string) => void;
@@ -31,7 +30,6 @@ interface AdminUserTableProps {
 
 const AdminUserTable = memo(({ 
   users, 
-  onAdd, 
   onEdit, 
   onDelete, 
   onEditStatus, 
@@ -40,13 +38,7 @@ const AdminUserTable = memo(({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <CardTitle className="text-2xl">Gerenciar Usuários</CardTitle>
-          <Button onClick={onAdd} data-testid="button-add-user">
-            <UserPlus className="h-4 w-4 mr-2" />
-            Adicionar Usuário
-          </Button>
-        </div>
+        <CardTitle className="text-2xl">Gerenciar Usuários</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
