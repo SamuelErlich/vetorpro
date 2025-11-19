@@ -40,7 +40,7 @@ const corsOptions: cors.CorsOptions = {
       callback(null, true);
     } else {
       console.warn(`⚠️ CORS: Blocked request from origin: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false); // Properly reject the request
     }
   },
   credentials: true, // Allow cookies for session management
