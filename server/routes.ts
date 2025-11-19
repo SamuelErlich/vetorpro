@@ -564,6 +564,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========== USER SERVICES ROUTES ==========
+
+  // Get user's services/subscriptions
+  app.get("/api/user-services", requireAuth, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const userServices = await storage.getUserServices(userId);
+      res.json(userServices);
+    } catch (error) {
+      console.error("Get user services error:", error);
+      res.status(500).json({ error: "Erro ao buscar serviços" });
+    }
+  });
+
   // ========== CREDENTIAL ROUTES ==========
   
   // Get user's credentials (only if payment is active)

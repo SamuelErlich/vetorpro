@@ -6,10 +6,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import CredentialsCard from "@/components/CredentialsCard";
 import PaymentButton from "@/components/PaymentButton";
 import PaymentCalendar from "@/components/PaymentCalendar";
+import RemoveBgCard from "@/components/RemoveBgCard";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User as UserType, Credential, Payment } from "@shared/schema";
+import type { User as UserType, Credential, Payment, UserService } from "@shared/schema";
 
 type AuthMeResponse = { user: UserType };
 type CredentialsResponse = { credentials: Credential[]; locked: boolean };
@@ -34,6 +35,11 @@ export default function ClientDashboard() {
     queryKey: ['/api/payments'],
   });
 
+  // Get user services
+  const { data: userServicesData, isLoading: servicesLoading } = useQuery<UserService[]>({
+    queryKey: ['/api/user-services'],
+  });
+
   const logoutMutation = useMutation({
     mutationFn: () => apiRequest('/api/auth/logout', {
       method: 'POST',
@@ -50,6 +56,11 @@ export default function ClientDashboard() {
 
   const handlePayClick = () => {
     setLocation('/payment');
+  };
+
+  const handleRemoveBgSubscribe = () => {
+    // Navigate to payment page with RemoveBG service
+    setLocation('/payment?service=removebg-001');
   };
 
   if (userLoading) {
@@ -73,6 +84,12 @@ export default function ClientDashboard() {
   const credentials = credentialsData?.credentials || [];
   const isLocked = credentialsData?.locked || false;
   const payments = paymentsData || [];
+  const userServices = userServicesData || [];
+
+  // Find RemoveBG service for current user
+  const removeBgService = userServices.find(
+    service => service.serviceId === "removebg-001"
+  );
 
   // Parse credentials data
   const parsedCredentials = credentials.map((cred: any) => {
@@ -168,6 +185,16 @@ export default function ClientDashboard() {
             month={currentCreds.month}
             credentials={currentCreds.items}
             isLocked={false}
+          />
+        )}
+
+        {/* RemoveBG Service Card */}
+        {servicesLoading ? (
+          <Skeleton className="h-64 w-full" />
+        ) : (
+          <RemoveBgCard 
+            userService={removeBgService || null}
+            onSubscribe={handleRemoveBgSubscribe}
           />
         )}
 
