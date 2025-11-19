@@ -2275,6 +2275,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add user subscription manually
+  app.post("/api/admin/services/:serviceId/subscribe", requireAdmin, async (req, res) => {
+    try {
+      const { serviceId } = req.params;
+      const { email, status = "ATIVO" } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email é obrigatório" });
+      }
+      
+      // Check if service exists
+      const service = await storage.getService(serviceId);
+      if (!service) {
+        return res.status(404).json({ error: "Serviço não encontrado" });
+      }
+      
+      // Get user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+      
+      // Check if user is already subscribed
+      const existingSubscription = await storage.getUserService(user.id, serviceId);
+      if (existingSubscription) {
+        return res.status(400).json({ error: "Usuário já está assinado neste serviço" });
+      }
+      
+      // Calculate next payment date (day 5 of next month)
+      const today = new Date();
+      const nextPaymentDate = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+      
+      // Create subscription
+      const userService = await storage.createUserService({
+        userId: user.id,
+        serviceId,
+        status,
+        ultimoPagamento: status === "ATIVO" ? new Date() : null,
+        proximoPagamento: nextPaymentDate,
+      });
+      
+      // If service is ATIVO, also update user's legacy status for backward compatibility
+      if (serviceId === "vectorizer-001" && status === "ATIVO") {
+        await storage.updateUser(user.id, { 
+          status: "ATIVO",
+          ultimoPagamento: new Date()
+        });
+      }
+      
+      res.json({
+        userService,
+        user: {
+          id: user.id,
+          email: user.email,
+          status: user.status
+        }
+      });
+    } catch (error) {
+      console.error("Error adding subscription:", error);
+      res.status(500).json({ error: "Erro ao adicionar assinatura" });
+    }
+  });
+
   // Get all services (for admin listing)
   app.get("/api/admin/services", requireAdmin, async (req, res) => {
     try {

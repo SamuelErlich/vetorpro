@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Info, Users, Key, Activity, ArrowLeft, Edit2, Save, X, Plus, Trash, ToggleLeft, ToggleRight } from "lucide-react";
+import { Info, Users, Key, Activity, ArrowLeft, Edit2, Save, X, Plus, Trash, ToggleLeft, ToggleRight, UserPlus } from "lucide-react";
 import { useState } from "react";
 import type { Service, UserService, Credential, User } from "@shared/schema";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -20,6 +20,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createInsertSchema } from "drizzle-zod";
 import { credentials } from "@shared/schema";
 import { z } from "zod";
+import AddSubscriberModal from "@/components/AddSubscriberModal";
 
 const insertCredentialSchema = createInsertSchema(credentials).omit({
   id: true,
@@ -52,6 +53,7 @@ export default function ServiceDetails() {
   const { toast } = useToast();
   const [editingService, setEditingService] = useState(false);
   const [editedService, setEditedService] = useState<Partial<Service>>({});
+  const [showAddSubscriberModal, setShowAddSubscriberModal] = useState(false);
 
   // Fetch service details
   const { data: service, isLoading: serviceLoading } = useQuery<ServiceWithSubscribers>({
@@ -138,6 +140,32 @@ export default function ServiceDetails() {
       toast({
         title: "Erro ao atualizar",
         description: error.message || "Não foi possível atualizar o status do usuário.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add subscriber mutation
+  const addSubscriberMutation = useMutation({
+    mutationFn: async ({ email, status }: { email: string; status: "ATIVO" | "INATIVO" }) => {
+      return apiRequest(`/api/admin/services/${serviceId}/subscribe`, {
+        method: "POST",
+        body: JSON.stringify({ email, status }),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/services", serviceId] });
+      toast({
+        title: "Assinante adicionado",
+        description: "O usuário foi adicionado ao serviço com sucesso.",
+      });
+      setShowAddSubscriberModal(false);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao adicionar assinante",
+        description: error.message || "Não foi possível adicionar o usuário ao serviço.",
         variant: "destructive",
       });
     },
@@ -384,10 +412,21 @@ export default function ServiceDetails() {
           <TabsContent value="subscribers" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Assinantes do Serviço</CardTitle>
-                <CardDescription>
-                  {activeSubscribers} assinantes ativos de {totalSubscribers} total
-                </CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Assinantes do Serviço</CardTitle>
+                    <CardDescription>
+                      {activeSubscribers} assinantes ativos de {totalSubscribers} total
+                    </CardDescription>
+                  </div>
+                  <Button
+                    onClick={() => setShowAddSubscriberModal(true)}
+                    data-testid="button-add-subscriber"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Adicionar Assinante
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -586,6 +625,17 @@ export default function ServiceDetails() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* Add Subscriber Modal */}
+      <AddSubscriberModal
+        open={showAddSubscriberModal}
+        onClose={() => setShowAddSubscriberModal(false)}
+        onConfirm={(email, status) => {
+          addSubscriberMutation.mutate({ email, status });
+        }}
+        serviceName={service?.nome || ""}
+        isLoading={addSubscriberMutation.isPending}
+      />
     </div>
   );
 }
