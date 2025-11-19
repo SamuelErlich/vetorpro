@@ -1202,6 +1202,78 @@ class PostgresStorage implements IStorage {
     return await this.db.select().from(payments);
   }
 
+  // Get pending payment for a specific user and service
+  async getPendingPayment(userId: string, serviceId: string): Promise<Payment | undefined> {
+    const result = await this.db.select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.userId, userId),
+          eq(payments.serviceId, serviceId),
+          eq(payments.status, 'pending')
+        )
+      )
+      .orderBy(desc(payments.createdAt))
+      .limit(1);
+    return result[0];
+  }
+
+  // Cancel all pending payments for a user and service
+  async cancelPendingPayments(userId: string, serviceId: string, exceptTxid?: string): Promise<void> {
+    const conditions = [
+      eq(payments.userId, userId),
+      eq(payments.serviceId, serviceId),
+      eq(payments.status, 'pending')
+    ];
+    
+    if (exceptTxid) {
+      conditions.push(sql`LOWER(${payments.txid}) != LOWER(${exceptTxid})`);
+    }
+    
+    await this.db.update(payments)
+      .set({ status: 'canceled' })
+      .where(and(...conditions));
+  }
+
+  // Get filtered payments for user history (paid + latest pending only)
+  async getFilteredPaymentsForUser(userId: string): Promise<Payment[]> {
+    // Get all paid payments
+    const paidPayments = await this.db.select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.userId, userId),
+          or(
+            eq(payments.status, 'paid'),
+            eq(payments.status, 'completed')
+          )
+        )
+      );
+    
+    // Get the latest pending payment for each service
+    const pendingPayments = await this.db.select()
+      .from(payments)
+      .where(
+        and(
+          eq(payments.userId, userId),
+          eq(payments.status, 'pending')
+        )
+      )
+      .orderBy(desc(payments.createdAt));
+    
+    // Group pending by serviceId and keep only the latest
+    const latestPendingByService = new Map<string, Payment>();
+    for (const payment of pendingPayments) {
+      const serviceId = payment.serviceId || 'default';
+      if (!latestPendingByService.has(serviceId)) {
+        latestPendingByService.set(serviceId, payment);
+      }
+    }
+    
+    // Combine paid + latest pending
+    return [...paidPayments, ...Array.from(latestPendingByService.values())];
+  }
+
   async createPayment(insertPayment: InsertPayment): Promise<Payment> {
     const result = await this.db.insert(payments).values(insertPayment).returning();
     return result[0];

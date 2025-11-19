@@ -1456,22 +1456,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use serviceId from request or fallback to default
         const serviceId = requestServiceId || DEFAULT_SERVICE_ID;
         
-        const paymentData = {
-          userId: req.session.userId!,
-          serviceId, // Use the service from request or default
-          amount: amountInCents.toString(), // Store cents as string (decimal column)
-          status: "pending" as const,
-          txid: pixTxid, // Use REAL PIX ID as primary txid
-          pushinpayId: pixTxid, // Store same ID in both fields for compatibility
-        };
+        // Check if there's already a pending payment for this user and service
+        const existingPendingPayment = await storage.getPendingPayment(req.session.userId!, serviceId);
         
-        console.log(`📝 [PIX Payment] Payment data to save:`, JSON.stringify(paymentData, null, 2));
-        
-        payment = await storage.createPayment(paymentData);
+        if (existingPendingPayment) {
+          // Reuse the existing pending payment
+          console.log(`🔁 [PIX Payment] Reusing existing pending payment:
+            - Payment ID: ${existingPendingPayment.id}
+            - TXID: ${existingPendingPayment.txid}
+            - Created at: ${existingPendingPayment.createdAt}`);
+          
+          // Update the existing payment with new PIX data
+          payment = await storage.updatePayment(existingPendingPayment.id, {
+            txid: pixTxid,
+            pushinpayId: pixTxid,
+            amount: amountInCents.toString(),
+          });
+          
+          console.log(`✅ [PIX Payment] Updated existing pending payment with new PIX data`);
+        } else {
+          // Create new payment only if no pending payment exists
+          const paymentData = {
+            userId: req.session.userId!,
+            serviceId, // Use the service from request or default
+            amount: amountInCents.toString(), // Store cents as string (decimal column)
+            status: "pending" as const,
+            txid: pixTxid, // Use REAL PIX ID as primary txid
+            pushinpayId: pixTxid, // Store same ID in both fields for compatibility
+          };
+          
+          console.log(`📝 [PIX Payment] Creating new payment:`, JSON.stringify(paymentData, null, 2));
+          
+          payment = await storage.createPayment(paymentData);
+        }
         
         if (!payment) {
-          console.error("❌ [PIX Payment] storage.createPayment returned null/undefined");
-          throw new Error("Failed to create payment record - storage returned null");
+          console.error("❌ [PIX Payment] storage.createPayment/updatePayment returned null/undefined");
+          throw new Error("Failed to create/update payment record - storage returned null");
         }
       } catch (paymentError: any) {
         console.error("❌ [PIX Payment] Failed to create payment in storage:", paymentError);
