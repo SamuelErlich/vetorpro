@@ -21,7 +21,7 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, isNull, or, like, desc, asc, and } from "drizzle-orm";
+import { eq, isNull, or, like, desc, asc, and, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -350,8 +350,17 @@ export class MemStorage implements IStorage {
   }
 
   async getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined> {
+    // Case-insensitive comparison for PushinPay IDs
+    const pushinpayIdLower = pushinpayId.toLowerCase();
+    const pushinpayIdUpper = pushinpayId.toUpperCase();
+    
     return Array.from(this.payments.values()).find(
-      (payment) => payment.pushinpayId === pushinpayId,
+      (payment) => {
+        if (!payment.pushinpayId) return false;
+        return payment.pushinpayId === pushinpayId || 
+               payment.pushinpayId.toLowerCase() === pushinpayIdLower ||
+               payment.pushinpayId.toUpperCase() === pushinpayIdUpper;
+      }
     );
   }
 
@@ -582,7 +591,10 @@ class PostgresStorage implements IStorage {
   }
 
   async getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined> {
-    const result = await this.db.select().from(payments).where(eq(payments.pushinpayId, pushinpayId!));
+    // Case-insensitive search for PushinPay ID using SQL LOWER() function
+    const result = await this.db.select()
+      .from(payments)
+      .where(sql`LOWER(${payments.pushinpayId}) = LOWER(${pushinpayId})`);
     return result[0];
   }
 

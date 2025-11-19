@@ -845,10 +845,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           EndToEndId: pixData.EndToEndId,
         });
         
-        // CRITICAL: Overwrite ALL identifier fields with our TXID
-        // This ensures consistency across client, database, and webhook
+        // CRITICAL: Store our TXID but preserve PushinPay's original ID
+        // DO NOT overwrite pixData.id - we need it for webhook matching!
         pixData.txid = ourTxid;
-        pixData.id = ourTxid;
+        // pixData.id = ourTxid; // REMOVED - Keep PushinPay's original ID!
       }
 
       // Extract PushinPay's EndToEndId (check various possible field names)
@@ -1265,11 +1265,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // CRITICAL: PushinPay may send TXID in various field names
       // Function to normalize and find TXID from multiple possible field names
       const findTxidFromBody = (body: any): string | null => {
-        // List of all possible field names for TXID
-        const possibleFields = [
+        // First, prioritize finding our TXID or PushinPay's transaction_id
+        const primaryFields = [
           'txid',
           'transaction_id',
           'transactionId',
+          'id', // PushinPay often sends their ID here
+        ];
+        
+        for (const field of primaryFields) {
+          if (body[field]) {
+            console.log(`✅ Found TXID in primary field '${field}': ${body[field]}`);
+            return body[field];
+          }
+        }
+        
+        // Then check EndToEndId variations (less common)
+        const endToEndFields = [
           'EndToEndId',
           'endToEndId',
           'end_to_end_id',
@@ -1279,8 +1291,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'e2eid',
           'E2EID',
           'EndToEndID',
-          'endtoendid', // lowercase version
-          'ENDTOENDID', // uppercase version
+          'endtoendid',
+          'ENDTOENDID',
           'end2endId',
           'end2end_id',
           'e2e_id',
@@ -1289,13 +1301,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           'tx_id',
           'txId',
           'TXID',
-          'id', // Sometimes just 'id'
         ];
         
-        // Check each possible field name
-        for (const field of possibleFields) {
+        // Check each EndToEnd field name
+        for (const field of endToEndFields) {
           if (body[field]) {
-            console.log(`✅ Found TXID in field '${field}': ${body[field]}`);
+            console.log(`✅ Found TXID in EndToEnd field '${field}': ${body[field]}`);
             return body[field];
           }
         }
