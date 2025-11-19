@@ -31,9 +31,19 @@ export default function ClientLogin() {
         body: JSON.stringify(credentials),
         headers: { 'Content-Type': 'application/json' },
       }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-      setLocation('/dashboard');
+    onSuccess: async () => {
+      // Invalidate and refetch user data to get admin status
+      await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+      const userData = await queryClient.fetchQuery<AuthMeResponse>({ 
+        queryKey: ['/api/auth/me'] 
+      });
+      
+      // Redirect based on admin status
+      if (userData?.user?.isAdmin === true || userData?.user?.isAdmin === "true") {
+        setLocation('/admin');
+      } else {
+        setLocation('/dashboard');
+      }
     },
     onError: (error: any) => {
       toast({
