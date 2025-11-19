@@ -170,12 +170,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if user has any active service (multi-service support)
-      const userServices = await storage.getUserServicesByUserId(user.id);
-      const hasActiveService = userServices?.some(us => us.status === "ATIVO") || false;
+      const userServices = await storage.getUserServices(user.id);
+      console.log(`🔍 [LOGIN] Checking services for ${email}:`, {
+        userId: user.id,
+        currentUserStatus: user.status,
+        servicesFound: userServices?.length || 0,
+        services: userServices?.map((us: any) => ({
+          serviceId: us.serviceId,
+          status: us.status,
+          nextPaymentDate: us.proximoPagamento
+        }))
+      });
+      
+      const hasActiveService = userServices?.some((us: any) => us.status === "ATIVO") || false;
+      console.log(`🔍 [LOGIN] Has active service: ${hasActiveService}`);
       
       // Allow login if user has at least one active service OR user status is ATIVO
       if (!hasActiveService && user.status !== "ATIVO") {
-        console.log(`❌ Login blocked for ${email} - User status: ${user.status}, Active services: ${hasActiveService}`);
+        console.log(`❌ [LOGIN] Blocked for ${email} - User status: ${user.status}, No active services`);
         return res.status(403).json({ 
           error: "Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
           inactive: true,
@@ -185,8 +197,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // If user has active service but Users.status is not ATIVO, sync it
       if (hasActiveService && user.status !== "ATIVO") {
-        console.log(`✅ Syncing user status for ${email} - has active services`);
+        console.log(`✅ [LOGIN] Syncing user status for ${email} - has active services, updating from ${user.status} to ATIVO`);
         await storage.updateUser(user.id, { status: "ATIVO" });
+        console.log(`✅ [LOGIN] User status synced successfully for ${email}`);
+      } else if (hasActiveService) {
+        console.log(`✅ [LOGIN] User ${email} already ATIVO, no sync needed`);
+      } else if (user.status === "ATIVO" && !hasActiveService) {
+        console.log(`⚠️ [LOGIN] User ${email} is ATIVO but has no active services - allowing login based on legacy status`);
       }
 
       req.session.userId = user.id;
