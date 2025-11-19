@@ -53,7 +53,10 @@ export default function EditStatusDialog({
         body: JSON.stringify({ status }),
       }),
     onSuccess: () => {
+      // Invalidate all queries starting with "admin-users" to handle filtered queries
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+      // Also invalidate the unfiltered query
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/users"] });
       toast({ title: "Status atualizado com sucesso!" });
       onOpenChange(false);
     },

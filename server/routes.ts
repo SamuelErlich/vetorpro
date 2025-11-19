@@ -621,13 +621,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const { status } = req.body;
 
+      console.log(`📝 Updating user ${id} status to: ${status}`);
+
       if (!status || !["ATIVO", "INATIVO", "BLOQUEADO"].includes(status)) {
         return res.status(400).json({ error: "Status inválido" });
       }
 
+      // Get user before update for debugging
+      const userBefore = await storage.getUser(id);
+      console.log(`   Before update - Status: ${userBefore?.status}`);
+
       const user = await storage.updateUser(id, { status });
       if (!user) {
         return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
+      console.log(`   After update - Status: ${user.status}`);
+
+      // Also update all user services to match the user status
+      const userServices = await storage.getUserServices(id);
+      for (const userService of userServices) {
+        await storage.updateUserService(userService.id, { status });
+        console.log(`   Updated service ${userService.serviceId} to status: ${status}`);
       }
 
       const { password: _, ...userWithoutPassword } = user;
