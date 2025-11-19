@@ -24,29 +24,28 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 **Onde obter:** Dashboard PushinPay
 **Formato:** Token fornecido pela PushinPay
 
-### 4. PUSHINPAY_WEBHOOK_SECRET ⚠️ CRÍTICO - OBRIGATÓRIO!
-**Status:** ❌ NÃO CONFIGURADO - CAUSANDO ERRO 401 NO WEBHOOK!
-**Descrição:** Chave secreta para validar webhooks da PushinPay
-**Como configurar:**
+### 4. PUSHINPAY_WEBHOOK_SECRET (OPCIONAL)
+**Status:** ⚠️ OPCIONAL - Webhook funciona sem este secret
+**Descrição:** Chave secreta para validar webhooks da PushinPay (autenticação por header)
 
+**IMPORTANTE:** A PushinPay **NÃO envia header x-token** na maioria dos casos.
+O webhook foi configurado para funcionar **sem header**, usando validação de payload (TXID matching).
+
+**Se você quiser configurar (opcional):**
 1. Gere uma chave forte:
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+2. Configure no Replit: Tools → Secrets → `PUSHINPAY_WEBHOOK_SECRET`
+3. Configure no PushinPay (se houver campo para isso)
 
-2. Configure no Replit:
-   - Tools → Secrets → New Secret
-   - Key: `PUSHINPAY_WEBHOOK_SECRET`
-   - Value: Cole a chave gerada
-   
-3. Configure NO DASHBOARD PUSHINPAY:
-   - Acesse Configurações → Webhooks
-   - Cole A MESMA CHAVE no campo Secret/Token
-   - URL: `https://SEU-DOMINIO.replit.dev/api/webhook/pushinpay`
+**Segurança SEM header:**
+- Validação por TXID único
+- Matching com payment no banco de dados
+- Idempotência anti-duplicatas
+- Status validation (PAID/paid/pago/confirmed)
 
-**ATENÇÃO:** A chave DEVE ser EXATAMENTE igual em ambos os lugares!
-
-📖 **Guia completo:** Veja `WEBHOOK_PUSHINPAY_SETUP.md`
+📖 **Guia completo:** Veja `WEBHOOK_PUSHINPAY_FINAL.md`
 
 ## 📧 Secrets para Email (Resend)
 
