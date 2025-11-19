@@ -1,0 +1,89 @@
+Reescreva e modernize o painel administrativo "Gerenciar Usuários" para funcionar com a arquitetura atual da aplicação, que agora possui múltiplos serviços. Não quebre nenhuma rota já existente e não altere o fluxo atual de assinaturas. Apenas adapte a tela e o backend para refletir corretamente o modelo multi-serviço.
+
+Objetivo: unificar dados da tabela Users com dados da tabela UserServices, permitindo que o administrador veja, por usuário, todos os serviços que ele possui e o status de cada serviço individualmente. O painel deve deixar de usar o campo antigo users.status como fonte principal, pois o status real agora é por serviço.
+
+Regras obrigatórias:
+
+Não alterar fluxos de pagamento existentes.
+
+Não alterar a UI do usuário final.
+
+Não alterar o painel de serviços.
+
+Não remover funcionalidades existentes.
+
+Não quebrar nenhuma rota atual.
+
+Usar a tabela UserServices como fonte de verdade para status.
+
+Cada usuário pode ter vários serviços diferentes, cada um com status independente: ATIVO, INATIVO, BLOQUEADO.
+
+A tabela Users continua existindo e deve ser usada para dados básicos (id, email, senha, dataCadastro).
+
+A tela antiga de Gerenciar Usuários deve ser substituída por uma versão que lista todos os usuários e, dentro de cada usuário, lista os serviços vinculados a ele.
+
+O que precisa ser implementado:
+
+Backend
+Atualizar ou substituir o endpoint GET /api/admin/users.
+Ele deve retornar, para cada usuário:
+
+id
+
+email
+
+dataCadastro
+
+lista de serviços, extraída da tabela UserServices, incluindo:
+serviceId
+nome
+status
+ultimoPagamento
+proximoPagamento
+desconto
+tipo do serviço
+ativo (boolean)
+Se algum usuário não tiver entrada em UserServices para um serviço ativo, retornar esse serviço como INATIVO.
+
+Criar endpoints adicionais quando necessário:
+
+GET /api/admin/users/:id/services
+
+PATCH /api/admin/users/:id/services/:serviceId (para alterar status, desconto ou datas)
+Deixe o método, contratos e retornos livres para decidir a melhor implementação.
+
+Frontend Admin
+A página Gerenciar Usuários deve ser reescrita com nova estrutura:
+
+Listar todos os usuários em uma tabela.
+
+Cada linha deve exibir: email, número de serviços ativos, data do último pagamento global.
+
+Ao clicar em um usuário, abrir uma view de detalhes que exibe:
+Lista de serviços assinados
+Nome do serviço
+Status por serviço
+UltimoPagamento
+ProximoPagamento
+Desconto
+Ações: Ativar, Desativar, Bloquear, Ajustar desconto, Ver histórico de pagamentos.
+
+Compatibilidade
+Manter todas as rotas antigas funcionando.
+Se o frontend estiver esperando o campo users.status, retornar um status agregado baseado nas regras:
+
+Se qualquer serviço estiver ATIVO, retornar status = ATIVO.
+
+Se todos estiverem INATIVO, retornar status = INATIVO.
+
+Se algum estiver BLOQUEADO, retornar BLOQUEADO.
+Essa regra é apenas para compatibilidade e não deve ser usada em novas implementações.
+
+Performance
+O painel precisa carregar rapidamente. Use consultas otimizadas e, quando necessário, utilize JOIN, SELECT agrupado ou pré-carregamento de dados. Evite consultas repetidas por usuário.
+
+Liberdade de implementação
+Decida a melhor forma de organizar controllers, services, repositories e migrations para implementar essa funcionalidade sem quebrar o sistema atual. Mantenha o estilo de código atual do projeto e siga o padrão que já está sendo usado.
+
+Resumo final:
+Reescreva o painel Gerenciar Usuários para integrar Users + UserServices, permitindo visualizar assinaturas por serviço, status individual e histórico de pagamentos. Garanta 100 por cento de compatibilidade com o sistema atual, sem alterar fluxos, sem criar telas novas para o usuário final e sem modificar o painel de serviços. Apenas modularize e modernize a lógica de administração de usuários para um ambiente multi-serviço.
