@@ -220,6 +220,27 @@ export class MemStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<boolean> {
+    // Delete all related records first (in order of dependencies)
+    
+    // 1. Delete password reset tokens
+    this.passwordResets = this.passwordResets.filter(pr => pr.userId !== id);
+    
+    // 2. Delete RemoveBG usage records
+    this.removeBgUsage = this.removeBgUsage.filter(usage => usage.userId !== id);
+    
+    // 3. Delete payments
+    this.payments = this.payments.filter(payment => payment.userId !== id);
+    
+    // 4. Delete user services
+    this.userServices = this.userServices.filter(us => us.userId !== id);
+    
+    // 5. Note: We don't delete removeBgApiKeys as they are created by admins
+    // and should remain even if the admin user is deleted
+    
+    // 6. Delete credentials (if any have userId)
+    this.credentials = this.credentials.filter(cred => cred.userId !== id);
+    
+    // Finally, delete the user
     return this.users.delete(id);
   }
 
@@ -822,6 +843,27 @@ class PostgresStorage implements IStorage {
   }
 
   async deleteUser(id: string): Promise<boolean> {
+    // Delete all related records first (in order of dependencies)
+    
+    // 1. Delete password reset tokens
+    await this.db.delete(passwordResets).where(eq(passwordResets.userId, id));
+    
+    // 2. Delete RemoveBG usage records
+    await this.db.delete(removeBgUsage).where(eq(removeBgUsage.userId, id));
+    
+    // 3. Delete payments
+    await this.db.delete(payments).where(eq(payments.userId, id));
+    
+    // 4. Delete user services
+    await this.db.delete(userServices).where(eq(userServices.userId, id));
+    
+    // 5. Note: We don't delete removeBgApiKeys as they are created by admins
+    // and should remain even if the admin user is deleted
+    
+    // 6. Delete credentials (if any have userId)
+    await this.db.delete(credentials).where(eq(credentials.userId, id));
+    
+    // Finally, delete the user
     const result = await this.db.delete(users).where(eq(users.id, id)).returning();
     return result.length > 0;
   }
