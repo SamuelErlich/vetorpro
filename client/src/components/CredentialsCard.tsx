@@ -4,6 +4,12 @@ import { Copy, Lock, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface CredentialItem {
   label: string;
@@ -51,9 +57,9 @@ export default function CredentialsCard({ month, credentials, isLocked }: Creden
       window.open(data.url, '_blank');
       
       toast({
-        title: "✅ Credenciais copiadas!",
-        description: "Cole no campo Email (Ctrl+V) → Tab → Cole na Senha (Ctrl+V)",
-        duration: 6000,
+        title: "✅ Senha copiada!",
+        description: "A senha do Vectorizer foi copiada. Cole na página que acabou de abrir.",
+        duration: 5000,
       });
     } catch (error) {
       toast({
@@ -119,15 +125,24 @@ export default function CredentialsCard({ month, credentials, isLocked }: Creden
           ))}
           
           <div className="pt-4 border-t">
-            <Button 
-              onClick={handleVectorizerLogin}
-              disabled={isLoadingVectorizer}
-              className="w-full"
-              data-testid="button-vectorizer-autologin"
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              {isLoadingVectorizer ? "Conectando..." : "Entrar no Vectorizer (1 Clique)"}
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={handleVectorizerLogin}
+                    disabled={isLoadingVectorizer}
+                    className="w-full"
+                    data-testid="button-vectorizer-autologin"
+                  >
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    {isLoadingVectorizer ? "Conectando..." : "Entrar no Vectorizer (1 Clique)"}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Ao clicar: copia sua senha e abre o Vectorizer</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </CardContent>
