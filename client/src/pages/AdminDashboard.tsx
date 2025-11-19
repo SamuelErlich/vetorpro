@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Users, CreditCard, Key, LogOut } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import AdminUserTable from "@/components/AdminUserTable";
 import AdminPaymentTable from "@/components/AdminPaymentTable";
 import AdminCredentialTable from "@/components/AdminCredentialTable";
@@ -294,10 +295,13 @@ export default function AdminDashboard() {
         <div className="flex flex-col flex-1">
           <header className="flex items-center justify-between p-4 border-b">
             <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <Button variant="outline" onClick={handleLogout} data-testid="button-logout">
-              <LogOut className="h-4 w-4 mr-2" />
-              Sair
-            </Button>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <Button variant="outline" onClick={handleLogout} data-testid="button-logout">
+                <LogOut className="h-4 w-4 mr-2" />
+                Sair
+              </Button>
+            </div>
           </header>
 
           <main className="flex-1 overflow-auto p-8">

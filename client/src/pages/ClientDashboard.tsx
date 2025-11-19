@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, MessageCircle } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import CredentialsCard from "@/components/CredentialsCard";
 import PaymentStatusBanner from "@/components/PaymentStatusBanner";
 import PaymentCalendar from "@/components/PaymentCalendar";
@@ -130,6 +131,7 @@ export default function ClientDashboard() {
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">{user?.email}</span>
             </div>
+            <ThemeToggle />
             <Button 
               variant="outline" 
               onClick={handleLogout} 
