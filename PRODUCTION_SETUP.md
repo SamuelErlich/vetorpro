@@ -47,6 +47,20 @@ O webhook foi configurado para funcionar **sem header**, usando validação de p
 
 📖 **Guia completo:** Veja `WEBHOOK_PUSHINPAY_FINAL.md`
 
+---
+
+## ⚙️ Configurações Adicionais
+
+### Modo Demo DESATIVADO
+**Status:** ✅ Modo demo está DESATIVADO
+**Comportamento:** O sistema **NÃO** gera PIX demo quando a API PushinPay falha
+**Resultado:** Se o IP não estiver configurado ou houver erro na API, o usuário verá uma mensagem de erro clara
+
+Não existe mais fallback automático para modo demo. Isso garante que:
+- Erros de configuração sejam visíveis imediatamente
+- Não haja confusão entre PIX real e PIX demo
+- Problemas sejam detectados antes de ir para produção
+
 ## 📧 Secrets para Email (Resend)
 
 ### 5. Integração Resend

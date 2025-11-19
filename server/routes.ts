@@ -816,25 +816,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const errorText = await pushinpayResponse.text();
           console.error("PushinPay API error:", pushinpayResponse.status, errorText);
           
-          // Fallback to DEMO mode if API is unavailable
-          const demoQrCodeBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+          // Return actual error instead of fallback to demo mode
+          let errorMessage = "Erro ao gerar PIX. Tente novamente.";
           
-          pixData = {
-            txid: ourTxid,
-            id: ourTxid,
-            qr_code: "00020101021126580014br.gov.bcb.pix0136demo-pix-code-for-testing-only5204000053039865802BR5925DEMO PUSHINPAY TESTING6009SAO PAULO62070503***6304ABCD",
-            qr_code_base64: demoQrCodeBase64,
-            status: "created",
-            value: amountInCents
-          };
-        } else {
-          pixData = await pushinpayResponse.json();
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson.error === "IP não configurado") {
+              errorMessage = "Erro de configuração: IP não autorizado na PushinPay. Entre em contato com o suporte.";
+            } else if (errorJson.error) {
+              errorMessage = `Erro PushinPay: ${errorJson.error}`;
+            }
+          } catch (e) {
+            // Keep default error message
+          }
           
-          // CRITICAL: Overwrite ALL identifier fields with our TXID
-          // This ensures consistency across client, database, and webhook
-          pixData.txid = ourTxid;
-          pixData.id = ourTxid;
+          return res.status(500).json({ error: errorMessage });
         }
+        
+        pixData = await pushinpayResponse.json();
+        
+        // CRITICAL: Overwrite ALL identifier fields with our TXID
+        // This ensures consistency across client, database, and webhook
+        pixData.txid = ourTxid;
+        pixData.id = ourTxid;
       }
 
       // Create payment record with OUR transaction ID (amount in cents as string)
