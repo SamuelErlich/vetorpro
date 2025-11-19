@@ -207,6 +207,19 @@ export class MemStorage implements IStorage {
       nextPaymentDate: null,
     };
     this.users.set(id, user);
+    
+    // Automatically add user to all existing services as INACTIVE
+    const allServices = Array.from(this.services.values());
+    for (const service of allServices) {
+      await this.createUserService({
+        userId: user.id,
+        serviceId: service.id,
+        status: "INATIVO",
+        ultimoPagamento: null,
+        proximoPagamento: null,
+      });
+    }
+    
     return user;
   }
 
@@ -330,6 +343,19 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.services.set(id, service);
+    
+    // Automatically add all existing users to this service as INACTIVE
+    const allUsers = Array.from(this.users.values());
+    for (const user of allUsers) {
+      await this.createUserService({
+        userId: user.id,
+        serviceId: service.id,
+        status: "INATIVO",
+        ultimoPagamento: null,
+        proximoPagamento: null,
+      });
+    }
+    
     return service;
   }
 
@@ -371,6 +397,7 @@ export class MemStorage implements IStorage {
       ultimoPagamento: insertUserService.ultimoPagamento ?? null,
       proximoPagamento: insertUserService.proximoPagamento ?? null,
       creditsAvailable: insertUserService.creditsAvailable ?? null,
+      planId: insertUserService.planId ?? null,
       createdAt: new Date(),
     };
     this.userServices.set(id, userService);
@@ -844,7 +871,21 @@ class PostgresStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const result = await this.db.insert(users).values(insertUser).returning();
-    return result[0];
+    const newUser = result[0];
+    
+    // Automatically add user to all existing services as INACTIVE
+    const allServices = await this.getAllServices();
+    for (const service of allServices) {
+      await this.createUserService({
+        userId: newUser.id,
+        serviceId: service.id,
+        status: "INATIVO",
+        ultimoPagamento: null,
+        proximoPagamento: null,
+      });
+    }
+    
+    return newUser;
   }
 
   async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
@@ -959,7 +1000,21 @@ class PostgresStorage implements IStorage {
 
   async createService(insertService: InsertService): Promise<Service> {
     const result = await this.db.insert(services).values(insertService).returning();
-    return result[0];
+    const newService = result[0];
+    
+    // Automatically add all existing users to this service as INACTIVE
+    const allUsers = await this.getAllUsers();
+    for (const user of allUsers) {
+      await this.createUserService({
+        userId: user.id,
+        serviceId: newService.id,
+        status: "INATIVO",
+        ultimoPagamento: null,
+        proximoPagamento: null,
+      });
+    }
+    
+    return newService;
   }
 
   async updateService(id: string, updates: Partial<Service>): Promise<Service | undefined> {
