@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { LogOut, User, MessageCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import CredentialsCard from "@/components/CredentialsCard";
-import PaymentStatusBanner from "@/components/PaymentStatusBanner";
+import PaymentButton from "@/components/PaymentButton";
 import PaymentCalendar from "@/components/PaymentCalendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -146,10 +146,8 @@ export default function ClientDashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8 max-w-7xl">
-        <PaymentStatusBanner
-          status={(user?.status === "ATIVO" || user?.status === "INATIVO") ? user.status : "INATIVO"}
-          lastPayment={user?.ultimoPagamento ? new Date(user.ultimoPagamento).toLocaleDateString('pt-BR') : undefined}
-          nextDue={user?.ultimoPagamento ? new Date(new Date(user.ultimoPagamento).setMonth(new Date(user.ultimoPagamento).getMonth() + 1)).toLocaleDateString('pt-BR') : undefined}
+        <PaymentButton
+          status={user?.status === "ATIVO" || user?.status === "INATIVO" || user?.status === "BLOQUEADO" ? user.status : "INATIVO"}
           onPayClick={handlePayClick}
         />
 
