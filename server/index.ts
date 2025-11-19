@@ -4,6 +4,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeData } from "./init-data";
 import { initializePaymentCron } from "./jobs/paymentCron";
+import { migrateRemoveBgApiKey } from "./migrations/removebg-api-key";
 
 const app = express();
 
@@ -98,6 +99,9 @@ app.use((req, res, next) => {
 (async () => {
   // Initialize sample data
   await initializeData();
+  
+  // Migrate RemoveBG API key from environment to database
+  await migrateRemoveBgApiKey();
   
   const server = await registerRoutes(app);
 
