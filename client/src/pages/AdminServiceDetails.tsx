@@ -20,7 +20,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { createInsertSchema } from "drizzle-zod";
 import { credentials } from "@shared/schema";
 import { z } from "zod";
-import AddSubscriberModal from "@/components/AddSubscriberModal";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const insertCredentialSchema = createInsertSchema(credentials).omit({
@@ -55,7 +54,6 @@ export default function ServiceDetails() {
   const { toast } = useToast();
   const [editingService, setEditingService] = useState(false);
   const [editedService, setEditedService] = useState<Partial<Service>>({});
-  const [showAddSubscriberModal, setShowAddSubscriberModal] = useState(false);
   const [editingUserPlans, setEditingUserPlans] = useState<Record<string, { planId: string | null; credits: number }>>({});
 
   // Fetch service details
@@ -440,13 +438,6 @@ export default function ServiceDetails() {
                       {activeSubscribers} assinantes ativos de {totalSubscribers} total
                     </CardDescription>
                   </div>
-                  <Button
-                    onClick={() => setShowAddSubscriberModal(true)}
-                    data-testid="button-add-subscriber"
-                  >
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Adicionar Assinante
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent>
@@ -798,14 +789,6 @@ export default function ServiceDetails() {
         </Tabs>
       </div>
 
-      {/* Add Subscriber Modal */}
-      <AddSubscriberModal
-        open={showAddSubscriberModal}
-        onClose={() => setShowAddSubscriberModal(false)}
-        onSuccess={() => setShowAddSubscriberModal(false)}
-        serviceName={service?.nome || ""}
-        serviceId={serviceId || ""}
-      />
     </div>
   );
 }
