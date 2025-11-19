@@ -43,12 +43,17 @@ export default function CredentialsCard({ month, credentials, isLocked }: Creden
         return;
       }
 
+      // Copy email and password to clipboard
+      const credentialsText = `${data.email}\t${data.senha}`;
+      await navigator.clipboard.writeText(credentialsText);
+
       // Open Vectorizer SSO URL in new tab
       window.open(data.url, '_blank');
       
       toast({
-        title: "Abrindo Vectorizer",
-        description: "Você será autenticado automaticamente",
+        title: "✅ Credenciais copiadas!",
+        description: "Cole no campo Email (Ctrl+V) → Tab → Cole na Senha (Ctrl+V)",
+        duration: 6000,
       });
     } catch (error) {
       toast({
