@@ -66,6 +66,7 @@ export interface IStorage {
   getAllPayments(): Promise<Payment[]>;
   createPayment(payment: InsertPayment): Promise<Payment>;
   updatePayment(id: string, payment: Partial<Payment>): Promise<Payment | undefined>;
+  deletePayment(id: string): Promise<boolean>;
   getPaymentByTxid(txid: string): Promise<Payment | undefined>;
   getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined>;
   
@@ -343,6 +344,10 @@ export class MemStorage implements IStorage {
     return updatedPayment;
   }
 
+  async deletePayment(id: string): Promise<boolean> {
+    return this.payments.delete(id);
+  }
+
   async getPaymentByTxid(txid: string): Promise<Payment | undefined> {
     return Array.from(this.payments.values()).find(
       (payment) => payment.txid === txid,
@@ -583,6 +588,11 @@ class PostgresStorage implements IStorage {
   async updatePayment(id: string, updates: Partial<Payment>): Promise<Payment | undefined> {
     const result = await this.db.update(payments).set(updates).where(eq(payments.id, id)).returning();
     return result[0];
+  }
+
+  async deletePayment(id: string): Promise<boolean> {
+    const result = await this.db.delete(payments).where(eq(payments.id, id)).returning();
+    return result.length > 0;
   }
 
   async getPaymentByTxid(txid: string): Promise<Payment | undefined> {

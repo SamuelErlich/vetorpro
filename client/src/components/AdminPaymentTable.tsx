@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { 
   Table, 
   TableBody, 
@@ -9,7 +10,17 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Search } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 interface Payment {
@@ -23,10 +34,13 @@ interface Payment {
 
 interface AdminPaymentTableProps {
   payments: Payment[];
+  onDelete?: (id: string) => void;
 }
 
-export default function AdminPaymentTable({ payments }: AdminPaymentTableProps) {
+export default function AdminPaymentTable({ payments, onDelete }: AdminPaymentTableProps) {
   const [search, setSearch] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [paymentToDelete, setPaymentToDelete] = useState<Payment | null>(null);
 
   const filteredPayments = payments.filter(payment => 
     payment.userEmail.toLowerCase().includes(search.toLowerCase()) ||
@@ -54,7 +68,21 @@ export default function AdminPaymentTable({ payments }: AdminPaymentTableProps) 
     }
   };
 
+  const handleDeleteClick = (payment: Payment) => {
+    setPaymentToDelete(payment);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = () => {
+    if (paymentToDelete && onDelete) {
+      onDelete(paymentToDelete.id);
+      setDeleteDialogOpen(false);
+      setPaymentToDelete(null);
+    }
+  };
+
   return (
+    <>
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -81,6 +109,7 @@ export default function AdminPaymentTable({ payments }: AdminPaymentTableProps) 
                 <TableHead>Valor</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>TxID</TableHead>
+                {onDelete && <TableHead className="text-right">Ações</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -93,6 +122,21 @@ export default function AdminPaymentTable({ payments }: AdminPaymentTableProps) 
                   <TableCell className="font-mono text-sm text-muted-foreground">
                     {payment.txid || "-"}
                   </TableCell>
+                  {onDelete && (
+                    <TableCell className="text-right">
+                      {payment.status === "pending" && (
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => handleDeleteClick(payment)}
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          data-testid={`button-delete-payment-${payment.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
@@ -100,5 +144,39 @@ export default function AdminPaymentTable({ payments }: AdminPaymentTableProps) 
         </div>
       </CardContent>
     </Card>
+
+    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir Pagamento</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir este pagamento pendente?
+            {paymentToDelete && (
+              <div className="mt-2 p-2 bg-muted rounded-md">
+                <p className="text-sm">
+                  <strong>Usuário:</strong> {paymentToDelete.userEmail}
+                </p>
+                <p className="text-sm">
+                  <strong>Valor:</strong> R$ {paymentToDelete.amount}
+                </p>
+                <p className="text-sm">
+                  <strong>Data:</strong> {paymentToDelete.date}
+                </p>
+              </div>
+            )}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            onClick={handleConfirmDelete}
+          >
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    </>
   );
 }

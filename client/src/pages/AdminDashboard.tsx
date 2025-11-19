@@ -214,6 +214,22 @@ export default function AdminDashboard() {
     },
   });
 
+  const deletePaymentMutation = useMutation({
+    mutationFn: (id: string) =>
+      apiRequest(`/api/admin/payments/${id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/payments'] });
+      toast({ title: "Pagamento excluído com sucesso!" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao excluir pagamento",
+        description: error.message || error.error || "Erro ao excluir pagamento",
+        variant: "destructive",
+      });
+    },
+  });
+
   const menuItems = [
     { title: "Usuários", icon: Users, id: "users" },
     { title: "Credenciais", icon: Key, id: "credentials" },
@@ -263,6 +279,10 @@ export default function AdminDashboard() {
     if (confirm("Tem certeza que deseja deletar esta credencial?")) {
       deleteCredentialMutation.mutate(credentialId);
     }
+  };
+
+  const handleDeletePayment = (paymentId: string) => {
+    deletePaymentMutation.mutate(paymentId);
   };
 
   const handleSubmitCredential = (data: any) => {
@@ -430,6 +450,7 @@ export default function AdminDashboard() {
                         date: new Date(p.createdAt).toLocaleDateString('pt-BR'),
                         amount: (parseFloat(p.amount) / 100).toFixed(2).replace('.', ','),
                       })) || []} 
+                      onDelete={handleDeletePayment}
                     />
                   )}
                 </>

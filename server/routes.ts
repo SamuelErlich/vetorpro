@@ -940,6 +940,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: Delete payment (only pending payments)
+  app.delete("/api/admin/payments/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get payment to check status
+      const payment = await storage.getPayment(id);
+      if (!payment) {
+        return res.status(404).json({ error: "Pagamento não encontrado" });
+      }
+
+      // Only allow deletion of pending payments
+      if (payment.status !== "pending") {
+        return res.status(400).json({ 
+          error: "Apenas pagamentos pendentes podem ser excluídos" 
+        });
+      }
+
+      // Delete the payment
+      const deleted = await storage.deletePayment(id);
+      if (!deleted) {
+        return res.status(500).json({ error: "Erro ao excluir pagamento" });
+      }
+
+      console.log(`✅ [ADMIN] Payment ${id} deleted by admin ${req.session.userId}`);
+      res.json({ success: true, message: "Pagamento excluído com sucesso" });
+    } catch (error) {
+      console.error("Delete payment error:", error);
+      res.status(500).json({ error: "Erro ao excluir pagamento" });
+    }
+  });
+
   // Admin: Test email system (manual trigger)
   app.post("/api/admin/test-email", requireAdmin, async (req, res) => {
     try {
