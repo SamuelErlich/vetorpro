@@ -49,6 +49,7 @@ export const payments = pgTable("payments", {
   amount: decimal("amount", { precision: 10, scale: 0 }).notNull(), // Amount in cents as decimal string (e.g., "1750")
   status: text("status").notNull().default("pending"),
   txid: text("txid"),
+  pushinpayId: varchar("pushinpay_id"), // Stores PushinPay's EndToEndId for webhook matching
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

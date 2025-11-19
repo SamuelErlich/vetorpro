@@ -835,19 +835,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         pixData = await pushinpayResponse.json();
         
+        // Log the PushinPay response for debugging
+        console.log("📝 PushinPay API Response:", {
+          id: pixData.id,
+          txid: pixData.txid,
+          endToEndId: pixData.endToEndId,
+          e2e_id: pixData.e2e_id,
+          end2end_id: pixData.end2end_id,
+          EndToEndId: pixData.EndToEndId,
+        });
+        
         // CRITICAL: Overwrite ALL identifier fields with our TXID
         // This ensures consistency across client, database, and webhook
         pixData.txid = ourTxid;
         pixData.id = ourTxid;
       }
 
-      // Create payment record with OUR transaction ID (amount in cents as string)
+      // Extract PushinPay's EndToEndId (check various possible field names)
+      const pushinpayId = pixData.endToEndId || 
+                          pixData.e2e_id || 
+                          pixData.end2end_id || 
+                          pixData.EndToEndId ||
+                          pixData.id; // Sometimes PushinPay returns their ID as 'id'
+      
+      // Log both IDs for debugging
+      console.log(`🔑 [PIX Payment] Creating payment with dual IDs:
+        - Our TXID: ${ourTxid}
+        - PushinPay ID: ${pushinpayId || 'Not provided in response'}`);
+
+      // Create payment record with BOTH transaction IDs (amount in cents as string)
       const payment = await storage.createPayment({
         userId: req.session.userId!,
         serviceId: DEFAULT_SERVICE_ID, // Default service for all payments
         amount: amountInCents.toString(), // Store cents as string (decimal column)
         status: "pending",
         txid: ourTxid, // CRITICAL: Use our own TXID
+        pushinpayId: pushinpayId || undefined, // Store PushinPay's ID if available
       });
 
       // Ensure qr_code_base64 has proper data URI prefix
@@ -1236,16 +1259,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log("ℹ️  No valid header auth - using payload validation (TXID matching)");
       }
       
-      // CRITICAL: PushinPay may send nested transaction object
-      // SECURITY: Only trust txid from body root, ignore nested IDs to prevent forgery
-      const { status, txid } = req.body;
+      // Log webhook body for debugging
+      console.log("📦 Webhook received body:", JSON.stringify(req.body));
       
-      // CRITICAL: Extract TXID only from root level (not from nested transaction)
-      const receivedTxid = txid;
+      // CRITICAL: PushinPay may send TXID in various field names
+      // Function to normalize and find TXID from multiple possible field names
+      const findTxidFromBody = (body: any): string | null => {
+        // List of all possible field names for TXID
+        const possibleFields = [
+          'txid',
+          'transaction_id',
+          'transactionId',
+          'EndToEndId',
+          'endToEndId',
+          'end_to_end_id',
+          'endToEndID',
+          'endTo_endID',
+          'endTo_end_id',
+          'e2eid',
+          'E2EID',
+          'EndToEndID',
+          'endtoendid', // lowercase version
+          'ENDTOENDID', // uppercase version
+          'end2endId',
+          'end2end_id',
+          'e2e_id',
+          'transaction_code',
+          'transactionCode',
+          'tx_id',
+          'txId',
+          'TXID',
+          'id', // Sometimes just 'id'
+        ];
+        
+        // Check each possible field name
+        for (const field of possibleFields) {
+          if (body[field]) {
+            console.log(`✅ Found TXID in field '${field}': ${body[field]}`);
+            return body[field];
+          }
+        }
+        
+        // If not found in direct fields, try nested objects
+        if (body.transaction?.id) {
+          console.log(`✅ Found TXID in nested 'transaction.id': ${body.transaction.id}`);
+          return body.transaction.id;
+        }
+        if (body.payment?.txid) {
+          console.log(`✅ Found TXID in nested 'payment.txid': ${body.payment.txid}`);
+          return body.payment.txid;
+        }
+        if (body.data?.endToEndId) {
+          console.log(`✅ Found TXID in nested 'data.endToEndId': ${body.data.endToEndId}`);
+          return body.data.endToEndId;
+        }
+        
+        return null;
+      };
+      
+      // Extract status and TXID using normalizer function
+      const { status } = req.body;
+      const receivedTxid = findTxidFromBody(req.body);
       
       if (!receivedTxid) {
-        return res.status(400).json({ error: "Missing transaction ID" });
+        console.error("❌ Webhook missing TXID. Searched all possible fields.");
+        console.error("📋 Available fields in body:", Object.keys(req.body));
+        return res.status(400).json({ error: "Missing TXID" });
       }
+      
+      console.log(`🔍 Normalized TXID: ${receivedTxid}`);
+      console.log(`📊 Processing webhook - TXID: ${receivedTxid}, Status: ${status}`);
       
       // Normalize status to lowercase for comparison
       const normalizedStatus = status?.toLowerCase();
@@ -1254,13 +1337,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Possible statuses: "created" | "paid" | "pago" | "confirmed" | "CONFIRMED" | "canceled"
       if (normalizedStatus === "paid" || normalizedStatus === "pago" || 
           normalizedStatus === "confirmed") {
-        const payment = await storage.getPaymentByTxid(receivedTxid);
+        // DUAL ID STRATEGY: Try to find payment by our TXID first, then by PushinPay's ID
+        let payment = await storage.getPaymentByTxid(receivedTxid);
         
         if (!payment) {
-          console.error(`Payment not found for txid: ${receivedTxid}`);
+          // Try to find by PushinPay ID as fallback
+          console.log(`🔍 Payment not found by our TXID, trying PushinPay ID: ${receivedTxid}`);
+          payment = await storage.getPaymentByPushinpayId(receivedTxid);
+        }
+        
+        if (!payment) {
+          console.error(`❌ Payment not found for ID: ${receivedTxid} (tried both TXID and PushinPay ID)`);
           // Return 200 to prevent PushinPay retries for unknown transactions
           return res.json({ success: true, message: "Payment not found" });
         }
+        
+        console.log(`✅ Payment found! Payment ID: ${payment.id}, Our TXID: ${payment.txid}, PushinPay ID: ${payment.pushinpayId}`)
 
         // Check if payment is already processed (idempotency)
         if (payment.status === "paid") {
@@ -1315,7 +1407,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ success: true, message: "Payment processed" });
       } else if (normalizedStatus === "canceled" || normalizedStatus === "cancelled" || normalizedStatus === "failed") {
         // Handle both PushinPay's "canceled" (1 L) and potential "cancelled" (2 Ls) variants
-        const payment = await storage.getPaymentByTxid(receivedTxid);
+        // DUAL ID STRATEGY: Try to find payment by our TXID first, then by PushinPay's ID
+        let payment = await storage.getPaymentByTxid(receivedTxid);
+        
+        if (!payment) {
+          // Try to find by PushinPay ID as fallback
+          console.log(`🔍 Payment not found by our TXID, trying PushinPay ID: ${receivedTxid}`);
+          payment = await storage.getPaymentByPushinpayId(receivedTxid);
+        }
         
         if (payment && payment.status !== "failed") {
           console.log(`Payment ${payment.id} marked as failed/canceled`);

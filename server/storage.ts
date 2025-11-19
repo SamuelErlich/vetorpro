@@ -67,6 +67,7 @@ export interface IStorage {
   createPayment(payment: InsertPayment): Promise<Payment>;
   updatePayment(id: string, payment: Partial<Payment>): Promise<Payment | undefined>;
   getPaymentByTxid(txid: string): Promise<Payment | undefined>;
+  getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined>;
   
   // Password Resets
   createPasswordReset(reset: InsertPasswordReset): Promise<PasswordReset>;
@@ -325,6 +326,7 @@ export class MemStorage implements IStorage {
       amount: insertPayment.amount, // Already string from schema
       status: insertPayment.status || "pending",
       txid: insertPayment.txid || null,
+      pushinpayId: insertPayment.pushinpayId || null,
       id,
       createdAt: new Date(),
     };
@@ -344,6 +346,12 @@ export class MemStorage implements IStorage {
   async getPaymentByTxid(txid: string): Promise<Payment | undefined> {
     return Array.from(this.payments.values()).find(
       (payment) => payment.txid === txid,
+    );
+  }
+
+  async getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined> {
+    return Array.from(this.payments.values()).find(
+      (payment) => payment.pushinpayId === pushinpayId,
     );
   }
 
@@ -570,6 +578,11 @@ class PostgresStorage implements IStorage {
 
   async getPaymentByTxid(txid: string): Promise<Payment | undefined> {
     const result = await this.db.select().from(payments).where(eq(payments.txid, txid!));
+    return result[0];
+  }
+
+  async getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined> {
+    const result = await this.db.select().from(payments).where(eq(payments.pushinpayId, pushinpayId!));
     return result[0];
   }
 
