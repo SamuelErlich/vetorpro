@@ -322,13 +322,13 @@ export default function AdminUsers() {
                                           {formatDate(userService.proximoPagamento)}
                                         </TableCell>
                                         <TableCell>
-                                          {userService.creditsAvailable !== null ? (
+                                          {userService.serviceId === 'removebg-001' && userService.creditsAvailable !== null ? (
                                             <div className="flex items-center gap-1">
                                               <CreditCard className="h-3 w-3" />
                                               {userService.creditsAvailable}
                                             </div>
                                           ) : (
-                                            "-"
+                                            <span className="text-muted-foreground">-</span>
                                           )}
                                         </TableCell>
                                         <TableCell className="text-right">
@@ -420,7 +420,7 @@ export default function AdminUsers() {
                 </Select>
               </div>
 
-              {editingService.userService.creditsAvailable !== null && (
+              {editingService.serviceId === 'removebg-001' && editingService.userService.creditsAvailable !== null && (
                 <div className="space-y-2">
                   <Label>Créditos Disponíveis</Label>
                   <Input
@@ -440,6 +440,9 @@ export default function AdminUsers() {
                       }
                     }}
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Ajuste manual de créditos do RemoveBG
+                  </p>
                 </div>
               )}
 
