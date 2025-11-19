@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { storage } from '../storage';
 import { sendEmail, emailTemplates } from '../utils/email';
 import { DEFAULT_SERVICE_ID, REMOVEBG_SERVICE_ID, REMOVEBG_PLANS } from '@shared/constants';
+import { removeBgService } from '../services/removebg.service';
 
 /**
  * Payment Monitoring Cron Jobs
@@ -305,6 +306,26 @@ async function blockOverdueUsers() {
 }
 
 /**
+ * Clean up old RemoveBG images (older than 7 days)
+ * Runs daily to free up storage space
+ */
+async function cleanupOldRemoveBgImages() {
+  console.log('🧹 [CRON] Running RemoveBG image cleanup (removing images older than 7 days)...');
+  
+  try {
+    const deletedCount = await removeBgService.cleanupOldImages(7);
+    
+    if (deletedCount > 0) {
+      console.log(`   ✅ Cleaned up ${deletedCount} old RemoveBG images`);
+    } else {
+      console.log('   ℹ️  No old images to clean up');
+    }
+  } catch (error) {
+    console.error('❌ [CRON ERROR] RemoveBG image cleanup failed:', error);
+  }
+}
+
+/**
  * Initialize all payment monitoring cron jobs
  * All payments due on DAY 5 of each month
  * Safe to call even if cron environment is not ideal
@@ -337,6 +358,12 @@ export function initializePaymentCron() {
       timezone: 'America/Sao_Paulo',
     });
     console.log('   ✅ Scheduled: Day 6, 9:00 AM - Block overdue users');
+
+    // DAILY at 2:00 AM - Clean up old RemoveBG images (older than 7 days)
+    cron.schedule('0 2 * * *', cleanupOldRemoveBgImages, {
+      timezone: 'America/Sao_Paulo',
+    });
+    console.log('   ✅ Scheduled: Daily, 2:00 AM - RemoveBG image cleanup (7+ days old)');
 
     console.log('✅ [CRON] All payment monitoring jobs initialized successfully');
     console.log('   ⚠️  Note: Cron jobs only run while the server is active.');
