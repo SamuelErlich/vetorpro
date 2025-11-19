@@ -853,10 +853,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Generate PIX payment (with rate limiting)
   app.post("/api/payments/pix", requireAuth, paymentsRateLimiter, async (req, res) => {
     try {
+      // === VALIDATION CHECKS START ===
+      console.log(`📝 [PIX Payment] Starting payment generation for user: ${req.session?.userId}`);
+      
+      // Check session validity
+      if (!req.session) {
+        console.error("❌ [PIX Payment] No session object available");
+        return res.status(401).json({ error: "Sessão inválida. Por favor, faça login novamente." });
+      }
+      
+      if (!req.session.userId) {
+        console.error("❌ [PIX Payment] No userId in session");
+        return res.status(401).json({ error: "Usuário não autenticado. Por favor, faça login novamente." });
+      }
+      
+      // Log critical environment variables status
+      console.log(`🔧 [PIX Payment] Environment check:
+        - NODE_ENV: ${process.env.NODE_ENV || 'not set'}
+        - PUSHINPAY_TOKEN: ${process.env.PUSHINPAY_TOKEN ? 'configured' : 'NOT CONFIGURED'}
+        - USE_PUSHINPAY_DEMO: ${process.env.USE_PUSHINPAY_DEMO || 'not set'}
+        - DATABASE_URL: ${process.env.DATABASE_URL ? 'configured' : 'NOT CONFIGURED'}`);
+      
+      // Check if database is accessible (simple validation)
+      if (!storage) {
+        console.error("❌ [PIX Payment] Storage object is not initialized");
+        return res.status(500).json({ error: "Sistema indisponível. Por favor, tente novamente." });
+      }
+      // === VALIDATION CHECKS END ===
+      
       const { amount } = req.body;
       
       // CRITICAL: Accept both number and string (frontend may send either)
       if (amount == null || amount === '') {
+        console.error("❌ [PIX Payment] Amount is null or empty:", amount);
         return res.status(400).json({ error: "Valor inválido" });
       }
 
@@ -868,10 +897,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Get user's discount
-      const user = await storage.getUser(req.session.userId!);
+      console.log(`📊 [PIX Payment] Fetching user data for userId: ${req.session.userId}`);
+      let user;
+      try {
+        user = await storage.getUser(req.session.userId!);
+      } catch (userFetchError: any) {
+        console.error("❌ [PIX Payment] Failed to fetch user from storage:", userFetchError);
+        console.error("Error details:", {
+          message: userFetchError?.message,
+          code: userFetchError?.code,
+          stack: userFetchError?.stack
+        });
+        return res.status(500).json({ error: "Erro ao buscar dados do usuário" });
+      }
+      
       if (!user) {
+        console.error(`❌ [PIX Payment] User not found for userId: ${req.session.userId}`);
         return res.status(404).json({ error: "Usuário não encontrado" });
       }
+      
+      console.log(`✅ [PIX Payment] User found - Email: ${user.email}, Status: ${user.status}, Discount: ${user.discount || 0}%`);
 
       // Apply discount if user has one
       const discount = user.discount || 0;
@@ -1074,16 +1119,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }`);
 
       // Create payment record with the REAL PIX ID as primary txid
-      const payment = await storage.createPayment({
-        userId: req.session.userId!,
-        serviceId: DEFAULT_SERVICE_ID, // Default service for all payments
-        amount: amountInCents.toString(), // Store cents as string (decimal column)
-        status: "pending",
-        txid: pixTxid, // Use REAL PIX ID as primary txid
-        pushinpayId: pixTxid, // Store same ID in both fields for compatibility
-      });
+      console.log(`💾 [PIX Payment] Creating payment record in database...`);
+      
+      let payment;
+      try {
+        const paymentData = {
+          userId: req.session.userId!,
+          serviceId: DEFAULT_SERVICE_ID, // Default service for all payments
+          amount: amountInCents.toString(), // Store cents as string (decimal column)
+          status: "pending" as const,
+          txid: pixTxid, // Use REAL PIX ID as primary txid
+          pushinpayId: pixTxid, // Store same ID in both fields for compatibility
+        };
+        
+        console.log(`📝 [PIX Payment] Payment data to save:`, JSON.stringify(paymentData, null, 2));
+        
+        payment = await storage.createPayment(paymentData);
+        
+        if (!payment) {
+          console.error("❌ [PIX Payment] storage.createPayment returned null/undefined");
+          throw new Error("Failed to create payment record - storage returned null");
+        }
+      } catch (paymentError: any) {
+        console.error("❌ [PIX Payment] Failed to create payment in storage:", paymentError);
+        console.error("Payment creation error details:", {
+          message: paymentError?.message,
+          code: paymentError?.code,
+          stack: paymentError?.stack,
+          sqlMessage: paymentError?.sqlMessage,
+          sql: paymentError?.sql
+        });
+        
+        // Return specific error based on the database error
+        if (paymentError?.code === 'ER_DUP_ENTRY' || paymentError?.message?.includes('duplicate')) {
+          return res.status(409).json({ error: "Pagamento duplicado. Por favor, aguarde ou tente novamente." });
+        }
+        
+        return res.status(500).json({ error: "Erro ao registrar pagamento no sistema" });
+      }
 
-      console.log(`💾 [PIX Payment] Payment created in database:
+      console.log(`✅ [PIX Payment] Payment created in database:
         - Payment ID: ${payment.id}
         - TXID (Primary): ${payment.txid}
         - PushinPay ID: ${payment.pushinpayId}
@@ -1134,9 +1209,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       console.log(`✅ [PIX Payment] PIX generated ${isUsingDemoMode ? '(DEMO MODE)' : 'successfully'} - Client will poll with TXID: ${pixTxid}`);
-    } catch (error) {
-      console.error("Generate PIX error:", error);
-      res.status(500).json({ error: "Erro ao gerar PIX" });
+    } catch (error: any) {
+      // Comprehensive error logging for debugging
+      console.error("========================================");
+      console.error("❌ [PIX ERROR] Generate PIX failed!");
+      console.error("========================================");
+      
+      // Log error details
+      console.error("Error Type:", error?.constructor?.name || "Unknown");
+      console.error("Error Message:", error?.message || "No message");
+      console.error("Error Code:", error?.code || "No code");
+      
+      // Log full error object
+      console.error("Full Error Object:", JSON.stringify(error, null, 2));
+      
+      // Log stack trace if available
+      if (error?.stack) {
+        console.error("Stack Trace:");
+        console.error(error.stack);
+      }
+      
+      // Log session information (safely)
+      console.error("\n--- Session Debug Info ---");
+      console.error("Session ID Exists:", !!req.session);
+      console.error("User ID:", req.session?.userId || "NO USER ID");
+      console.error("Is Admin:", req.session?.isAdmin || false);
+      
+      // Log environment variables status (without exposing sensitive values)
+      console.error("\n--- Environment Check ---");
+      console.error("NODE_ENV:", process.env.NODE_ENV || "not set");
+      console.error("PUSHINPAY_TOKEN configured:", !!process.env.PUSHINPAY_TOKEN);
+      console.error("PUSHINPAY_WEBHOOK_SECRET configured:", !!process.env.PUSHINPAY_WEBHOOK_SECRET);
+      console.error("USE_PUSHINPAY_DEMO:", process.env.USE_PUSHINPAY_DEMO || "not set");
+      console.error("REPLIT_DEV_DOMAIN:", process.env.REPLIT_DEV_DOMAIN || "not set");
+      console.error("SESSION_SECRET configured:", !!process.env.SESSION_SECRET);
+      console.error("DATABASE_URL configured:", !!process.env.DATABASE_URL);
+      
+      // Log request details
+      console.error("\n--- Request Debug Info ---");
+      console.error("Request Method:", req.method);
+      console.error("Request Path:", req.path);
+      console.error("Request Body:", JSON.stringify(req.body, null, 2));
+      console.error("Request Headers (relevant):", {
+        "content-type": req.headers["content-type"],
+        "user-agent": req.headers["user-agent"],
+        "x-forwarded-for": req.headers["x-forwarded-for"],
+        "x-real-ip": req.headers["x-real-ip"]
+      });
+      
+      // Check specific error scenarios
+      let errorResponse = { error: "Erro ao gerar PIX", details: null as any };
+      
+      // Check if it's a session/auth issue
+      if (!req.session?.userId) {
+        console.error("🚨 ERROR CAUSE: No user ID in session - Authentication issue!");
+        errorResponse.details = "Session authentication problem";
+      }
+      
+      // Check if it's a database/storage error
+      else if (error?.message?.toLowerCase().includes("storage") || 
+               error?.message?.toLowerCase().includes("database") ||
+               error?.code === "ECONNREFUSED") {
+        console.error("🚨 ERROR CAUSE: Database/Storage operation failed!");
+        errorResponse.details = "Database connection or operation issue";
+      }
+      
+      // Check if it's an environment variable issue
+      else if (error?.message?.toLowerCase().includes("env") ||
+               error?.message?.toLowerCase().includes("undefined")) {
+        console.error("🚨 ERROR CAUSE: Possible missing environment variable!");
+        errorResponse.details = "Configuration issue";
+      }
+      
+      // Check if it's a network/API error
+      else if (error?.message?.toLowerCase().includes("fetch") ||
+               error?.message?.toLowerCase().includes("network") ||
+               error?.message?.toLowerCase().includes("timeout")) {
+        console.error("🚨 ERROR CAUSE: Network/API communication error!");
+        errorResponse.details = "External API communication issue";
+      }
+      
+      // Check if it's a validation error
+      else if (error?.message?.toLowerCase().includes("invalid") ||
+               error?.message?.toLowerCase().includes("validation")) {
+        console.error("🚨 ERROR CAUSE: Data validation error!");
+        errorResponse.details = "Invalid data or parameters";
+      }
+      
+      // Unknown error
+      else {
+        console.error("🚨 ERROR CAUSE: Unknown - check full error details above");
+        errorResponse.details = "Unknown error - check server logs";
+      }
+      
+      console.error("\n========================================");
+      console.error("Timestamp:", new Date().toISOString());
+      console.error("========================================\n");
+      
+      // Return error with more context (but don't expose sensitive info)
+      res.status(500).json(errorResponse);
     }
   });
 
