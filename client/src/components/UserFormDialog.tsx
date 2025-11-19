@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 
 interface UserFormDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ interface UserFormDialogProps {
     id: string;
     email: string;
     status: string;
+    discount?: number;
   };
 }
 
@@ -32,19 +34,20 @@ export default function UserFormDialog({ open, onClose, onSubmit, user }: UserFo
   const [email, setEmail] = useState(user?.email || "");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState(user?.status || "INATIVO");
+  const [discount, setDiscount] = useState<number>(user?.discount || 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     let submitData;
     if (user) {
-      // When editing: only send password if it's not empty, always send status
+      // When editing: only send password if it's not empty, always send status and discount
       submitData = password.trim() 
-        ? { password, status }
-        : { status };
+        ? { password, status, discount }
+        : { status, discount };
     } else {
       // When creating: send all fields
-      submitData = { email, password, status };
+      submitData = { email, password, status, discount };
     }
     
     onSubmit(submitData);
@@ -102,6 +105,25 @@ export default function UserFormDialog({ open, onClose, onSubmit, user }: UserFo
                 <SelectItem value="BLOQUEADO">Bloqueado</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="discount">Desconto: {discount}%</Label>
+            <Slider 
+              id="discount"
+              value={[discount]}
+              onValueChange={(value) => setDiscount(value[0])}
+              max={100}
+              min={0}
+              step={1}
+              className="w-full"
+              data-testid="slider-user-discount"
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>0%</span>
+              <span>{discount}%</span>
+              <span>100%</span>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

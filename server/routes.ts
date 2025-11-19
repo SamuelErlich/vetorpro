@@ -794,11 +794,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Sanitize amount input (CRITICAL: convert string to number if needed)
-      const sanitizedAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+      const originalAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
       
-      if (isNaN(sanitizedAmount) || sanitizedAmount <= 0) {
+      if (isNaN(originalAmount) || originalAmount <= 0) {
         return res.status(400).json({ error: "Valor inválido" });
       }
+
+      // Get user's discount
+      const user = await storage.getUser(req.session.userId!);
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
+      // Apply discount if user has one
+      const discount = user.discount || 0;
+      const discountMultiplier = 1 - (discount / 100);
+      const sanitizedAmount = originalAmount * discountMultiplier;
 
       // PushinPay requires minimum value of 50 centavos (R$ 0.50)
       const amountInCents = Math.round(sanitizedAmount * 100);
@@ -955,8 +966,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qrCode: pixData.qr_code,
         txid: pixTxid, // Return REAL PIX ID for frontend polling
         status: pixData.status,
-        amount: sanitizedAmount, // Return original reais for UI
+        amount: sanitizedAmount, // Return discounted amount for UI
         amountCents: amountInCents, // Also provide cents for reference
+        originalAmount: originalAmount, // Original price before discount
+        discount: discount, // Discount percentage
+        discountAmount: originalAmount - sanitizedAmount, // Amount saved
       });
 
       console.log(`✅ [PIX Payment] PIX generated successfully - Client will poll with TXID: ${pixTxid}`);

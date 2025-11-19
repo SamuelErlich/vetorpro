@@ -17,6 +17,7 @@ interface User {
   email: string;
   status: "ATIVO" | "PENDENTE" | "INATIVO" | "BLOQUEADO";
   lastPayment?: string;
+  discount?: number;
 }
 
 interface AdminUserTableProps {
@@ -54,6 +55,7 @@ const AdminUserTable = memo(({
               <TableRow>
                 <TableHead>Email</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Desconto</TableHead>
                 <TableHead>Último Pagamento</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
               </TableRow>
@@ -79,6 +81,15 @@ const AdminUserTable = memo(({
                     >
                       {user.status}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {user.discount ? (
+                      <Badge variant="outline" className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300 dark:border-blue-700">
+                        {user.discount}%
+                      </Badge>
+                    ) : (
+                      <span className="text-muted-foreground">0%</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {user.lastPayment || "-"}

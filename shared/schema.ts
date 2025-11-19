@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -21,6 +21,7 @@ export const users = pgTable("users", {
   ultimoPagamento: timestamp("ultimo_pagamento"), // Mantido para compatibilidade
   nextPaymentDate: timestamp("next_payment_date"), // Mantido para compatibilidade
   isAdmin: text("is_admin").notNull().default("false"),
+  discount: integer("discount").notNull().default(0), // Percentage discount 0-100
 });
 
 // Tabela que representa assinatura de um usuário a um serviço
@@ -71,6 +72,8 @@ export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   ultimoPagamento: true,
   nextPaymentDate: true, // Calculado automaticamente ao processar pagamento
+}).extend({
+  discount: z.number().int().min(0).max(100).optional().default(0), // Ensure discount is between 0-100
 });
 
 export const insertUserServiceSchema = createInsertSchema(userServices).omit({

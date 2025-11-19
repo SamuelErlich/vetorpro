@@ -154,6 +154,7 @@ export class MemStorage implements IStorage {
       password: insertUser.password || null,
       status: insertUser.status || "INATIVO",
       isAdmin: insertUser.isAdmin || "false",
+      discount: insertUser.discount || 0,
       id,
       ultimoPagamento: null,
       nextPaymentDate: null,
