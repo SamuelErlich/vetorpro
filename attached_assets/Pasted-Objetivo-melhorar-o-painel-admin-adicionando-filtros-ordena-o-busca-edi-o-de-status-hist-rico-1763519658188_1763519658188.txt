@@ -1,0 +1,116 @@
+Objetivo: melhorar o painel admin adicionando filtros, ordenação, busca, edição de status, histórico de pagamentos e exportação CSV. Não alterar nenhuma funcionalidade já existente no sistema. Apenas adicionar as novas capacidades no backend (Express) e frontend (React + shadcn/ui + TanStack Query).
+
+Filtro por status
+Adicionar suporte ao parâmetro "status" na rota GET /api/admin/users
+Exemplos:
+GET /api/admin/users?status=ATIVO
+GET /api/admin/users?status=BLOQUEADO
+GET /api/admin/users?status=INATIVO
+Se não for enviado retorna todos.
+
+Frontend:
+Criar um select com os valores:
+Todos
+ATIVO
+BLOQUEADO
+INATIVO
+Quando o valor mudar, refazer a query usando TanStack Query enviando status como parâmetro.
+
+Ordenação
+Adicionar suporte ao parâmetro "sort" na rota GET /api/admin/users.
+Opções:
+ultimoPagamento_desc
+ultimoPagamento_asc
+cadastro_desc
+cadastro_asc
+
+Por padrão usar cadastro_desc.
+
+Frontend:
+Criar outro select chamado "Ordenar por" com opções:
+Pagamento mais recente
+Pagamento mais antigo
+Cadastro mais recente
+Cadastro mais antigo
+Refazer a query ao mudar o valor.
+
+Busca por email
+Adicionar suporte ao parâmetro "search" na rota GET /api/admin/users.
+A busca deve retornar usuários cujo email contenha o termo enviado.
+
+Frontend:
+Criar input de busca.
+Adicionar debounce de 300ms.
+Cada alteração dispara nova query usando o parâmetro search.
+
+Editar status manualmente
+Backend:
+Adicionar rota PATCH /api/admin/users/:id/status com body:
+{ "status": "ATIVO" | "BLOQUEADO" | "INATIVO" }
+
+Frontend:
+Adicionar botão "Editar status" para cada usuário.
+Abrir modal (Dialog shadcn/ui).
+Select para escolher o novo status.
+Botão Salvar.
+Após salvar, chamar invalidateQueries do TanStack Query.
+
+Histórico de tentativas de pagamento
+Backend:
+Criar rota GET /api/admin/payments/user/:id
+Retornar todos os pagamentos desse usuário com os campos:
+id, amount, status, txid, createdAt
+
+Frontend:
+Botão "Ver pagamentos" no card do usuário.
+Abrir um Drawer ou Sheet usando shadcn/ui.
+Mostrar tabela com colunas:
+Data
+Valor
+Status
+Txid
+Ordenar por data desc.
+
+Exportar usuários para CSV
+Backend:
+Criar rota GET /api/admin/users/export
+Retornar CSV com cabeçalho:
+email,status,ultimoPagamento,totalPago,dataCadastro
+
+Calcular totalPago somando todos payments com status paid.
+
+Configurar o response:
+Content-Type: text/csv
+Content-Disposition: attachment; filename="usuarios.csv"
+
+Frontend:
+Adicionar botão "Exportar CSV" e baixar o arquivo.
+
+Integração com TanStack Query
+A chave da query do admin deve ser:
+["admin-users", { status, search, sort }]
+
+Cada mudança em filtro, ordenação ou busca deve refazer a query.
+Após editar status ou criar algo novo, usar invalidateQueries.
+
+Interface
+Usar shadcn/ui:
+Select
+Input
+Button
+Dialog
+Sheet
+Table
+Card
+
+Manter design igual ao atual, sem mudar estilos principais.
+
+Não alterar funcionalidades existentes
+Não tocar no webhook
+Não tocar no cron
+Não tocar no sistema de pagamentos
+Não mexer no login
+Não mexer nas regras de bloqueio
+Somente adicionar as funcionalidades citadas
+
+Fim do prompt.

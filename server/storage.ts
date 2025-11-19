@@ -15,13 +15,18 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, isNull, or } from "drizzle-orm";
+import { eq, isNull, or, like, desc, asc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
+  getUsersWithFilters(filters: {
+    status?: "ATIVO" | "INATIVO" | "BLOQUEADO";
+    search?: string;
+    sort?: "ultimoPagamento_desc" | "ultimoPagamento_asc" | "cadastro_desc" | "cadastro_asc";
+  }): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<User>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
@@ -76,6 +81,44 @@ export class MemStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return Array.from(this.users.values());
+  }
+
+  async getUsersWithFilters(filters: {
+    status?: "ATIVO" | "INATIVO" | "BLOQUEADO";
+    search?: string;
+    sort?: "ultimoPagamento_desc" | "ultimoPagamento_asc" | "cadastro_desc" | "cadastro_asc";
+  }): Promise<User[]> {
+    let result = Array.from(this.users.values());
+
+    if (filters.status) {
+      result = result.filter((user) => user.status === filters.status);
+    }
+
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter((user) =>
+        user.email.toLowerCase().includes(searchLower)
+      );
+    }
+
+    if (filters.sort) {
+      result.sort((a, b) => {
+        switch (filters.sort) {
+          case "ultimoPagamento_desc":
+            return (b.ultimoPagamento?.getTime() || 0) - (a.ultimoPagamento?.getTime() || 0);
+          case "ultimoPagamento_asc":
+            return (a.ultimoPagamento?.getTime() || 0) - (b.ultimoPagamento?.getTime() || 0);
+          case "cadastro_desc":
+            return b.id.localeCompare(a.id);
+          case "cadastro_asc":
+            return a.id.localeCompare(b.id);
+          default:
+            return 0;
+        }
+      });
+    }
+
+    return result;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -251,6 +294,47 @@ class PostgresStorage implements IStorage {
 
   async getAllUsers(): Promise<User[]> {
     return await this.db.select().from(users);
+  }
+
+  async getUsersWithFilters(filters: {
+    status?: "ATIVO" | "INATIVO" | "BLOQUEADO";
+    search?: string;
+    sort?: "ultimoPagamento_desc" | "ultimoPagamento_asc" | "cadastro_desc" | "cadastro_asc";
+  }): Promise<User[]> {
+    let query = this.db.select().from(users);
+
+    const conditions = [];
+    if (filters.status) {
+      conditions.push(eq(users.status, filters.status));
+    }
+    if (filters.search) {
+      conditions.push(like(users.email, `%${filters.search}%`));
+    }
+
+    if (conditions.length > 0) {
+      query = query.where(conditions.length === 1 ? conditions[0] : or(...conditions)!) as any;
+    }
+
+    if (filters.sort) {
+      switch (filters.sort) {
+        case "ultimoPagamento_desc":
+          query = query.orderBy(desc(users.ultimoPagamento)) as any;
+          break;
+        case "ultimoPagamento_asc":
+          query = query.orderBy(asc(users.ultimoPagamento)) as any;
+          break;
+        case "cadastro_desc":
+          query = query.orderBy(desc(users.id)) as any;
+          break;
+        case "cadastro_asc":
+          query = query.orderBy(asc(users.id)) as any;
+          break;
+      }
+    } else {
+      query = query.orderBy(desc(users.id)) as any;
+    }
+
+    return await query;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {

@@ -338,6 +338,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== USER ROUTES (Admin only) ==========
   
+  // Admin: Get users with filters
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const { status, search, sort } = req.query;
+      
+      const filters: any = {};
+      if (status && (status === "ATIVO" || status === "INATIVO" || status === "BLOQUEADO")) {
+        filters.status = status;
+      }
+      if (search && typeof search === "string") {
+        filters.search = search;
+      }
+      if (sort && typeof sort === "string") {
+        filters.sort = sort;
+      }
+
+      const users = await storage.getUsersWithFilters(filters);
+      const usersWithoutPasswords = users.map(({ password, ...user }) => user);
+      res.json(usersWithoutPasswords);
+    } catch (error) {
+      console.error("Get users with filters error:", error);
+      res.status(500).json({ error: "Erro ao buscar usuários" });
+    }
+  });
+  
+  // Legacy route for backwards compatibility
   app.get("/api/users", requireAdmin, async (req, res) => {
     try {
       const users = await storage.getAllUsers();
@@ -413,6 +439,76 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Delete user error:", error);
       res.status(500).json({ error: "Erro ao deletar usuário" });
+    }
+  });
+
+  // Admin: Update user status manually
+  app.patch("/api/admin/users/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      if (!status || !["ATIVO", "INATIVO", "BLOQUEADO"].includes(status)) {
+        return res.status(400).json({ error: "Status inválido" });
+      }
+
+      const user = await storage.updateUser(id, { status });
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+
+      const { password: _, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("Update user status error:", error);
+      res.status(500).json({ error: "Erro ao atualizar status" });
+    }
+  });
+
+  // Admin: Get user payment history
+  app.get("/api/admin/payments/user/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const payments = await storage.getPaymentsByUserId(id);
+      res.json(payments);
+    } catch (error) {
+      console.error("Get user payments error:", error);
+      res.status(500).json({ error: "Erro ao buscar pagamentos" });
+    }
+  });
+
+  // Admin: Export users to CSV
+  app.get("/api/admin/users/export", requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getAllUsers();
+      const allPayments = await storage.getAllPayments();
+
+      const csvRows = [];
+      csvRows.push("email,status,ultimoPagamento,totalPago,dataCadastro");
+
+      for (const user of users) {
+        const userPayments = allPayments.filter((p) => p.userId === user.id && p.status === "paid");
+        const totalPago = userPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+        const totalPagoReais = (totalPago / 100).toFixed(2);
+
+        const row = [
+          user.email,
+          user.status,
+          user.ultimoPagamento ? new Date(user.ultimoPagamento).toLocaleDateString("pt-BR") : "",
+          totalPagoReais,
+          user.id,
+        ];
+
+        csvRows.push(row.join(","));
+      }
+
+      const csv = csvRows.join("\n");
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader("Content-Disposition", "attachment; filename=usuarios.csv");
+      res.send(csv);
+    } catch (error) {
+      console.error("Export users error:", error);
+      res.status(500).json({ error: "Erro ao exportar usuários" });
     }
   });
 
