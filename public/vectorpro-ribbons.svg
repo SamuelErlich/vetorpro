@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <linearGradient id="ribbon1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0AE6FF;stop-opacity:0.85" />
+      <stop offset="50%" style="stop-color:#2478FF;stop-opacity:0.75" />
+      <stop offset="100%" style="stop-color:#0A60FF;stop-opacity:0.65" />
+    </linearGradient>
+    
+    <linearGradient id="ribbon2" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#0A60FF;stop-opacity:0.7" />
+      <stop offset="50%" style="stop-color:#2478FF;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#0AE6FF;stop-opacity:0.75" />
+    </linearGradient>
+    
+    <linearGradient id="ribbon3" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" style="stop-color:#2478FF;stop-opacity:0.6" />
+      <stop offset="50%" style="stop-color:#0A60FF;stop-opacity:0.7" />
+      <stop offset="100%" style="stop-color:#0AE6FF;stop-opacity:0.65" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Light blue background -->
+  <rect width="1920" height="1080" fill="#E8F7FF"/>
+  
+  <!-- First ribbon - cyan flowing from top-left -->
+  <path 
+    d="M -200,150 Q 300,100 600,200 T 1200,300 Q 1500,350 1800,250 L 2100,200"
+    fill="none"
+    stroke="url(#ribbon1)"
+    stroke-width="220"
+    stroke-linecap="round"
+    opacity="0.9"
+  />
+  
+  <!-- Second ribbon - blue flowing through center -->
+  <path 
+    d="M -100,500 Q 400,450 800,520 T 1400,600 Q 1700,650 2000,580"
+    fill="none"
+    stroke="url(#ribbon2)"
+    stroke-width="200"
+    stroke-linecap="round"
+    opacity="0.85"
+  />
+  
+  <!-- Third ribbon - deep blue from bottom -->
+  <path 
+    d="M 200,900 Q 600,850 900,920 T 1500,880 Q 1800,850 2100,900"
+    fill="none"
+    stroke="url(#ribbon3)"
+    stroke-width="180"
+    stroke-linecap="round"
+    opacity="0.75"
+  />
+</svg>
