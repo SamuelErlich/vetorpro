@@ -9,9 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Info, Users, Key, Activity, ArrowLeft, Edit2, Save, X, Plus, Trash, ToggleLeft, ToggleRight, UserPlus } from "lucide-react";
+import { Info, Users, Key, Activity, ArrowLeft, Edit2, Save, X, Plus, Trash, ToggleLeft, ToggleRight, UserPlus, CreditCard, Zap } from "lucide-react";
 import { useState } from "react";
-import type { Service, UserService, Credential, User } from "@shared/schema";
+import type { Service, UserService, Credential, User, RemoveBgPlan } from "@shared/schema";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -21,6 +21,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { credentials } from "@shared/schema";
 import { z } from "zod";
 import AddSubscriberModal from "@/components/AddSubscriberModal";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const insertCredentialSchema = createInsertSchema(credentials).omit({
   id: true,
@@ -35,6 +36,7 @@ interface ServiceWithSubscribers extends Service {
 
 interface UserServiceWithUser extends UserService {
   user?: User;
+  plan?: RemoveBgPlan;
 }
 
 interface RemoveBgUsage {
@@ -54,6 +56,7 @@ export default function ServiceDetails() {
   const [editingService, setEditingService] = useState(false);
   const [editedService, setEditedService] = useState<Partial<Service>>({});
   const [showAddSubscriberModal, setShowAddSubscriberModal] = useState(false);
+  const [editingUserPlans, setEditingUserPlans] = useState<Record<string, { planId: string | null; credits: number }>>({});
 
   // Fetch service details
   const { data: service, isLoading: serviceLoading } = useQuery<ServiceWithSubscribers>({
@@ -89,6 +92,19 @@ export default function ServiceDetails() {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch usage");
+      return response.json();
+    },
+    enabled: serviceId === "removebg-001",
+  });
+
+  // Fetch RemoveBG plans if it's RemoveBG service
+  const { data: removeBgPlans } = useQuery<RemoveBgPlan[]>({
+    queryKey: ["/api/removebg/plans"],
+    queryFn: async () => {
+      const response = await fetch("/api/removebg/plans", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch plans");
       return response.json();
     },
     enabled: serviceId === "removebg-001",
@@ -140,6 +156,32 @@ export default function ServiceDetails() {
       toast({
         title: "Erro ao atualizar",
         description: error.message || "Não foi possível atualizar o status do usuário.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Update user plan mutation (for RemoveBG)
+  const updateUserPlanMutation = useMutation({
+    mutationFn: async ({ userId, planId, credits }: { userId: string; planId: string | null; credits: number }) => {
+      return apiRequest(`/api/admin/services/${serviceId}/users/${userId}/plan`, {
+        method: "PUT",
+        body: JSON.stringify({ planId, credits }),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/services", serviceId] });
+      setEditingUserPlans({});
+      toast({
+        title: "Plano atualizado",
+        description: "O plano e créditos foram atualizados com sucesso.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar plano",
+        description: error.message || "Não foi possível atualizar o plano do usuário.",
         variant: "destructive",
       });
     },
@@ -404,56 +446,198 @@ export default function ServiceDetails() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <div className="space-y-4">
                   {service.subscribers && service.subscribers.length > 0 ? (
-                    service.subscribers.map((subscriber) => (
-                      <div
-                        key={subscriber.id}
-                        className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium">{subscriber.user?.email}</p>
-                            <Badge variant={
-                              subscriber.status === "ATIVO" ? "default" : 
-                              subscriber.status === "INATIVO" ? "secondary" : 
-                              "destructive"
-                            }>
-                              {subscriber.status}
-                            </Badge>
-                          </div>
-                          <div className="flex gap-4 text-sm text-muted-foreground mt-1">
-                            {subscriber.ultimoPagamento && (
-                              <span>Último pagamento: {new Date(subscriber.ultimoPagamento).toLocaleDateString()}</span>
-                            )}
-                            {subscriber.proximoPagamento && (
-                              <span>Próximo pagamento: {new Date(subscriber.proximoPagamento).toLocaleDateString()}</span>
-                            )}
+                    service.subscribers.map((subscriber) => {
+                      const isEditing = !!editingUserPlans[subscriber.userId];
+                      const editingPlan = editingUserPlans[subscriber.userId];
+                      const currentPlan = removeBgPlans?.find(p => p.id === subscriber.planId);
+                      
+                      return (
+                        <div
+                          key={subscriber.id}
+                          className="p-4 bg-muted/50 rounded-lg"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <p className="font-medium">{subscriber.user?.email}</p>
+                                <Badge variant={
+                                  subscriber.status === "ATIVO" ? "default" : 
+                                  subscriber.status === "INATIVO" ? "secondary" : 
+                                  "destructive"
+                                }>
+                                  {subscriber.status}
+                                </Badge>
+                              </div>
+                              
+                              {/* RemoveBG specific fields */}
+                              {serviceId === "removebg-001" ? (
+                                <div className="space-y-3">
+                                  <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                      <Label className="text-sm text-muted-foreground">Plano Atual</Label>
+                                      {isEditing ? (
+                                        <Select
+                                          value={editingPlan?.planId || ""}
+                                          onValueChange={(value) => setEditingUserPlans(prev => ({
+                                            ...prev,
+                                            [subscriber.userId]: {
+                                              ...prev[subscriber.userId],
+                                              planId: value || null,
+                                              credits: removeBgPlans?.find(p => p.id === value)?.credits || prev[subscriber.userId]?.credits || 0
+                                            }
+                                          }))}
+                                        >
+                                          <SelectTrigger className="w-full mt-1" data-testid={`select-plan-${subscriber.userId}`}>
+                                            <SelectValue placeholder="Selecione um plano" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            <SelectItem value="">Sem plano</SelectItem>
+                                            {removeBgPlans?.map(plan => (
+                                              <SelectItem key={plan.id} value={plan.id}>
+                                                {plan.name} - R${plan.price} ({plan.credits} créditos)
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      ) : (
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <CreditCard className="h-4 w-4 text-muted-foreground" />
+                                          <span className="font-medium">
+                                            {currentPlan ? `${currentPlan.name} - R$${currentPlan.price}` : "Sem plano"}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    <div>
+                                      <Label className="text-sm text-muted-foreground">Créditos Disponíveis</Label>
+                                      {isEditing ? (
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          className="mt-1"
+                                          value={editingPlan?.credits || subscriber.creditsAvailable || 0}
+                                          onChange={(e) => setEditingUserPlans(prev => ({
+                                            ...prev,
+                                            [subscriber.userId]: {
+                                              ...prev[subscriber.userId],
+                                              credits: parseInt(e.target.value) || 0
+                                            }
+                                          }))}
+                                          data-testid={`input-credits-${subscriber.userId}`}
+                                        />
+                                      ) : (
+                                        <div className="flex items-center gap-2 mt-1">
+                                          <Zap className="h-4 w-4 text-muted-foreground" />
+                                          <span className="font-medium">{subscriber.creditsAvailable || 0}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                  
+                                  <div className="flex gap-4 text-sm text-muted-foreground">
+                                    {subscriber.ultimoPagamento && (
+                                      <span>Último pagamento: {new Date(subscriber.ultimoPagamento).toLocaleDateString()}</span>
+                                    )}
+                                    {subscriber.proximoPagamento && (
+                                      <span>Próximo pagamento: {new Date(subscriber.proximoPagamento).toLocaleDateString()}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                // Non-RemoveBG service display
+                                <div className="flex gap-4 text-sm text-muted-foreground">
+                                  {subscriber.ultimoPagamento && (
+                                    <span>Último pagamento: {new Date(subscriber.ultimoPagamento).toLocaleDateString()}</span>
+                                  )}
+                                  {subscriber.proximoPagamento && (
+                                    <span>Próximo pagamento: {new Date(subscriber.proximoPagamento).toLocaleDateString()}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex gap-2">
+                              {serviceId === "removebg-001" && (
+                                <>
+                                  {isEditing ? (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        onClick={() => {
+                                          const plan = editingUserPlans[subscriber.userId];
+                                          updateUserPlanMutation.mutate({
+                                            userId: subscriber.userId,
+                                            planId: plan.planId,
+                                            credits: plan.credits
+                                          });
+                                        }}
+                                        data-testid={`button-save-plan-${subscriber.userId}`}
+                                      >
+                                        <Save className="mr-2 h-4 w-4" />
+                                        Salvar
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setEditingUserPlans(prev => {
+                                          const next = { ...prev };
+                                          delete next[subscriber.userId];
+                                          return next;
+                                        })}
+                                        data-testid={`button-cancel-plan-${subscriber.userId}`}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setEditingUserPlans(prev => ({
+                                        ...prev,
+                                        [subscriber.userId]: {
+                                          planId: subscriber.planId,
+                                          credits: subscriber.creditsAvailable || 0
+                                        }
+                                      }))}
+                                      data-testid={`button-edit-plan-${subscriber.userId}`}
+                                    >
+                                      <Edit2 className="mr-2 h-4 w-4" />
+                                      Editar Plano
+                                    </Button>
+                                  )}
+                                </>
+                              )}
+                              
+                              <Button
+                                variant={subscriber.status === "ATIVO" ? "destructive" : "default"}
+                                size="sm"
+                                onClick={() => toggleUserServiceMutation.mutate({
+                                  userId: subscriber.userId,
+                                  newStatus: subscriber.status === "ATIVO" ? "INATIVO" : "ATIVO"
+                                })}
+                                data-testid={`button-toggle-user-${subscriber.userId}`}
+                              >
+                                {subscriber.status === "ATIVO" ? (
+                                  <>
+                                    <ToggleLeft className="mr-2 h-4 w-4" />
+                                    Desativar
+                                  </>
+                                ) : (
+                                  <>
+                                    <ToggleRight className="mr-2 h-4 w-4" />
+                                    Ativar
+                                  </>
+                                )}
+                              </Button>
+                            </div>
                           </div>
                         </div>
-                        <Button
-                          variant={subscriber.status === "ATIVO" ? "destructive" : "default"}
-                          size="sm"
-                          onClick={() => toggleUserServiceMutation.mutate({
-                            userId: subscriber.userId,
-                            newStatus: subscriber.status === "ATIVO" ? "INATIVO" : "ATIVO"
-                          })}
-                          data-testid={`button-toggle-user-${subscriber.userId}`}
-                        >
-                          {subscriber.status === "ATIVO" ? (
-                            <>
-                              <ToggleLeft className="mr-2 h-4 w-4" />
-                              Desativar
-                            </>
-                          ) : (
-                            <>
-                              <ToggleRight className="mr-2 h-4 w-4" />
-                              Ativar
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    ))
+                      );
+                    })
                   ) : (
                     <p className="text-center text-muted-foreground py-8">
                       Nenhum assinante encontrado

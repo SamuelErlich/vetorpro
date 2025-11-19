@@ -33,6 +33,7 @@ export const userServices = pgTable("user_services", {
   ultimoPagamento: timestamp("ultimo_pagamento"),
   proximoPagamento: timestamp("proximo_pagamento"), // Data do próximo vencimento
   creditsAvailable: integer("credits_available").default(0), // RemoveBG credits
+  planId: varchar("plan_id").references(() => removeBgPlans.id), // RemoveBG plan reference
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 

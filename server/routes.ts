@@ -2270,6 +2270,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Update user's RemoveBG plan and credits
+  app.put("/api/admin/services/:serviceId/users/:userId/plan", requireAdmin, async (req, res) => {
+    try {
+      const { serviceId, userId } = req.params;
+      const { planId, credits } = req.body;
+      
+      // Validate inputs
+      if (credits !== undefined && (typeof credits !== 'number' || credits < 0)) {
+        return res.status(400).json({ error: "Créditos inválidos" });
+      }
+      
+      // Check if user service exists
+      const userService = await storage.getUserService(userId, serviceId);
+      if (!userService) {
+        return res.status(404).json({ error: "Assinatura não encontrada" });
+      }
+      
+      // Update plan and credits
+      const updated = await storage.updateUserServicePlan(userId, serviceId, planId, credits);
+      
+      if (!updated) {
+        return res.status(500).json({ error: "Erro ao atualizar plano" });
+      }
+      
+      // Get the updated service with plan details
+      const updatedWithPlan = await storage.getUserServiceWithPlan(userId, serviceId);
+      
+      res.json(updatedWithPlan);
+    } catch (error) {
+      console.error("Error updating user plan:", error);
+      res.status(500).json({ error: "Erro ao atualizar plano do usuário" });
+    }
+  });
+
   // Add user subscription manually
   app.post("/api/admin/services/:serviceId/subscribe", requireAdmin, async (req, res) => {
     try {

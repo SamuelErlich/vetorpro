@@ -60,6 +60,8 @@ export interface IStorage {
   getUserServicesByServiceId(serviceId: string): Promise<UserService[]>;
   createUserService(userService: InsertUserService): Promise<UserService>;
   updateUserService(id: string, userService: Partial<UserService>): Promise<UserService | undefined>;
+  updateUserServicePlan(userId: string, serviceId: string, planId: string | null, credits: number): Promise<UserService | undefined>;
+  getUserServiceWithPlan(userId: string, serviceId: string): Promise<(UserService & { plan?: RemoveBgPlan }) | undefined>;
   
   // Credentials
   getCredential(id: string): Promise<Credential | undefined>;
@@ -291,6 +293,37 @@ export class MemStorage implements IStorage {
     const updatedUserService = { ...userService, ...updates };
     this.userServices.set(id, updatedUserService);
     return updatedUserService;
+  }
+
+  async updateUserServicePlan(userId: string, serviceId: string, planId: string | null, credits: number): Promise<UserService | undefined> {
+    const userService = await this.getUserService(userId, serviceId);
+    if (!userService) return undefined;
+
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    nextMonth.setDate(5);
+
+    const updatedUserService = { 
+      ...userService, 
+      planId,
+      creditsAvailable: credits,
+      proximoPagamento: nextMonth
+    };
+    
+    this.userServices.set(userService.id, updatedUserService);
+    return updatedUserService;
+  }
+
+  async getUserServiceWithPlan(userId: string, serviceId: string): Promise<(UserService & { plan?: RemoveBgPlan }) | undefined> {
+    const userService = await this.getUserService(userId, serviceId);
+    if (!userService) return undefined;
+
+    let plan: RemoveBgPlan | undefined = undefined;
+    if (userService.planId) {
+      plan = await this.getRemoveBgPlan(userService.planId);
+    }
+
+    return { ...userService, plan };
   }
 
   // Credentials
@@ -704,6 +737,46 @@ class PostgresStorage implements IStorage {
   async updateUserService(id: string, updates: Partial<UserService>): Promise<UserService | undefined> {
     const result = await this.db.update(userServices).set(updates).where(eq(userServices.id, id)).returning();
     return result[0];
+  }
+
+  async updateUserServicePlan(userId: string, serviceId: string, planId: string | null, credits: number): Promise<UserService | undefined> {
+    const nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
+    nextMonth.setDate(5);
+
+    const result = await this.db.update(userServices)
+      .set({ 
+        planId,
+        creditsAvailable: credits,
+        proximoPagamento: nextMonth
+      })
+      .where(and(
+        eq(userServices.userId, userId),
+        eq(userServices.serviceId, serviceId)
+      ))
+      .returning();
+    
+    return result[0];
+  }
+
+  async getUserServiceWithPlan(userId: string, serviceId: string): Promise<(UserService & { plan?: RemoveBgPlan }) | undefined> {
+    const userServiceResult = await this.db.select().from(userServices)
+      .where(and(
+        eq(userServices.userId, userId),
+        eq(userServices.serviceId, serviceId)
+      ));
+    
+    const userService = userServiceResult[0];
+    if (!userService) return undefined;
+
+    let plan: RemoveBgPlan | undefined = undefined;
+    if (userService.planId) {
+      const planResult = await this.db.select().from(removeBgPlans)
+        .where(eq(removeBgPlans.id, userService.planId));
+      plan = planResult[0];
+    }
+
+    return { ...userService, plan };
   }
 
   // Credentials
