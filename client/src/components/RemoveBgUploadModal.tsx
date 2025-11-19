@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
@@ -8,10 +8,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Download, Loader2, Image as ImageIcon } from "lucide-react";
+import { 
+  Upload, 
+  Download, 
+  Loader2, 
+  Image as ImageIcon,
+  FileImage,
+  Info,
+  Sparkles,
+  ArrowRight,
+  Check
+} from "lucide-react";
 import { useRemoveBgProcess, useRemoveBgEstimate } from "@/hooks/useRemoveBg";
 import { queryClient } from "@/lib/queryClient";
+import ImagePreview from "./ImagePreview";
+import BeforeAfterSlider from "./BeforeAfterSlider";
+import { cn } from "@/lib/utils";
 
 interface RemoveBgUploadModalProps {
   open: boolean;
@@ -27,12 +43,34 @@ export default function RemoveBgUploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [originalPreview, setOriginalPreview] = useState<string | null>(null);
   const [processedImage, setProcessedImage] = useState<string | null>(null);
+  const [originalImagePath, setOriginalImagePath] = useState<string | null>(null);
   const [estimatedCredits, setEstimatedCredits] = useState<number | null>(null);
+  const [fileSize, setFileSize] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [progressValue, setProgressValue] = useState(0);
   
   const { toast } = useToast();
   const processMutation = useRemoveBgProcess();
   const estimateMutation = useRemoveBgEstimate();
+
+  // Simulate processing progress
+  useEffect(() => {
+    if (processMutation.isPending) {
+      setProgressValue(0);
+      const interval = setInterval(() => {
+        setProgressValue((prev) => {
+          if (prev >= 90) {
+            clearInterval(interval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 500);
+      return () => clearInterval(interval);
+    } else if (processedImage) {
+      setProgressValue(100);
+    }
+  }, [processMutation.isPending, processedImage]);
 
   const handleFileSelect = useCallback(async (selectedFile: File) => {
     // Validate file type
@@ -57,13 +95,23 @@ export default function RemoveBgUploadModal({
 
     setFile(selectedFile);
     setProcessedImage(null);
+    setOriginalImagePath(null);
+    setProgressValue(0);
     
-    // Create preview
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setOriginalPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(selectedFile);
+    // Format file size
+    const size = selectedFile.size;
+    const units = ["B", "KB", "MB", "GB"];
+    let unitIndex = 0;
+    let formattedSize = size;
+    while (formattedSize >= 1024 && unitIndex < units.length - 1) {
+      formattedSize /= 1024;
+      unitIndex++;
+    }
+    setFileSize(`${formattedSize.toFixed(2)} ${units[unitIndex]}`);
+    
+    // Create preview using URL.createObjectURL for better performance
+    const objectUrl = URL.createObjectURL(selectedFile);
+    setOriginalPreview(objectUrl);
 
     // Estimate credits
     const formData = new FormData();
@@ -129,6 +177,8 @@ export default function RemoveBgUploadModal({
       if (result?.data) {
         // Display processed image
         setProcessedImage(result.data.processedImagePath);
+        setOriginalImagePath(result.data.originalImagePath);
+        setProgressValue(100);
         
         toast({
           title: "Sucesso!",
@@ -161,18 +211,35 @@ export default function RemoveBgUploadModal({
   };
 
   const handleClose = () => {
+    // Clean up object URL if exists
+    if (originalPreview) {
+      URL.revokeObjectURL(originalPreview);
+    }
     setFile(null);
     setOriginalPreview(null);
     setProcessedImage(null);
+    setOriginalImagePath(null);
     setEstimatedCredits(null);
+    setFileSize(null);
+    setProgressValue(0);
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
         <DialogHeader>
-          <DialogTitle>Remover Fundo da Imagem</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-xl">Remover Fundo da Imagem</DialogTitle>
+            <div className="flex items-center gap-2">
+              {availableCredits !== undefined && (
+                <Badge variant="outline" className="text-xs">
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  {availableCredits} créditos disponíveis
+                </Badge>
+              )}
+            </div>
+          </div>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -209,63 +276,137 @@ export default function RemoveBgUploadModal({
           {/* Preview Area */}
           {file && (
             <div className="space-y-4">
-              {/* File Info */}
-              <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <ImageIcon className="h-4 w-4" />
-                  <span className="text-sm font-medium">{file.name}</span>
-                </div>
-                {estimatedCredits !== null && (
-                  <Badge variant="secondary">
-                    {estimatedCredits} crédito(s) necessário(s)
-                  </Badge>
-                )}
-              </div>
-
-              {/* Images */}
-              <div className="grid grid-cols-2 gap-4">
-                {/* Original */}
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Original</p>
-                  {originalPreview && (
-                    <div className="border rounded-lg overflow-hidden">
-                      <img
-                        src={originalPreview}
-                        alt="Original"
-                        className="w-full h-auto"
-                        data-testid="preview-original"
-                      />
+              {/* File Info Card */}
+              <Card className="p-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                      <FileImage className="h-5 w-5 text-primary" />
                     </div>
-                  )}
-                </div>
-
-                {/* Processed */}
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">Sem Fundo</p>
-                  <div className="border rounded-lg overflow-hidden min-h-[200px] flex items-center justify-center bg-muted/20">
-                    {processMutation.isPending && (
-                      <div className="text-center space-y-2">
-                        <Loader2 className="h-8 w-8 animate-spin mx-auto" />
-                        <p className="text-sm text-muted-foreground">Processando...</p>
-                        <Progress value={50} className="w-32" />
+                    <div>
+                      <p className="text-sm font-medium">{file.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-xs text-muted-foreground">{fileSize}</span>
+                        {estimatedCredits !== null && (
+                          <>
+                            <span className="text-xs text-muted-foreground">•</span>
+                            <span className="text-xs text-muted-foreground">
+                              {estimatedCredits} crédito{estimatedCredits !== 1 ? "s" : ""} necessário{estimatedCredits !== 1 ? "s" : ""}
+                            </span>
+                          </>
+                        )}
                       </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {estimatedCredits !== null && availableCredits < estimatedCredits && (
+                      <Badge variant="destructive" className="text-xs">
+                        Créditos insuficientes
+                      </Badge>
+                    )}
+                    {estimatedCredits !== null && availableCredits >= estimatedCredits && !processedImage && (
+                      <Badge variant="secondary" className="text-xs">
+                        Pronto para processar
+                      </Badge>
                     )}
                     {processedImage && (
-                      <img
-                        src={processedImage}
-                        alt="Processada"
-                        className="w-full h-auto"
-                        data-testid="preview-processed"
-                      />
-                    )}
-                    {!processMutation.isPending && !processedImage && (
-                      <p className="text-sm text-muted-foreground">
-                        Clique em processar para remover o fundo
-                      </p>
+                      <Badge variant="secondary" className="text-xs">
+                        <Check className="h-3 w-3 mr-1" />
+                        Processado
+                      </Badge>
                     )}
                   </div>
                 </div>
-              </div>
+              </Card>
+
+              {/* Image Display */}
+              {processedImage ? (
+                // After processing - show comparison view
+                <Tabs defaultValue="comparison" className="w-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="comparison">Comparação</TabsTrigger>
+                    <TabsTrigger value="original">Original</TabsTrigger>
+                    <TabsTrigger value="processed">Sem Fundo</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="comparison" className="mt-4">
+                    <BeforeAfterSlider
+                      beforeImage={originalImagePath || originalPreview || ""}
+                      afterImage={processedImage}
+                      beforeLabel="Original"
+                      afterLabel="Sem Fundo"
+                      className="w-full"
+                      aspectRatio="video"
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="original" className="mt-4">
+                    <ImagePreview
+                      src={originalImagePath || originalPreview || ""}
+                      alt="Original"
+                      className="w-full"
+                      aspectRatio="video"
+                      showZoomControls
+                    />
+                  </TabsContent>
+                  
+                  <TabsContent value="processed" className="mt-4">
+                    <div className="relative">
+                      {/* Checkered background for transparency */}
+                      <div className="absolute inset-0 rounded-lg overflow-hidden">
+                        <div 
+                          className="w-full h-full opacity-10"
+                          style={{
+                            backgroundImage: `repeating-conic-gradient(#666 0% 25%, transparent 0% 50%)`,
+                            backgroundSize: '20px 20px',
+                          }}
+                        />
+                      </div>
+                      <ImagePreview
+                        src={processedImage}
+                        alt="Sem Fundo"
+                        className="w-full relative"
+                        aspectRatio="video"
+                        showZoomControls
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              ) : (
+                // Before processing - show original preview with processing state
+                <div className="relative">
+                  {originalPreview && (
+                    <ImagePreview
+                      src={originalPreview}
+                      alt="Original"
+                      className="w-full"
+                      aspectRatio="video"
+                      showZoomControls={!processMutation.isPending}
+                    />
+                  )}
+                  
+                  {/* Processing Overlay */}
+                  {processMutation.isPending && (
+                    <div className="absolute inset-0 bg-background/80 backdrop-blur-sm rounded-lg flex items-center justify-center animate-in fade-in-0 duration-200">
+                      <Card className="p-6 text-center space-y-4 max-w-xs">
+                        <div className="flex justify-center">
+                          <div className="relative">
+                            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                            <div className="absolute inset-0 animate-ping">
+                              <Sparkles className="h-12 w-12 text-primary/30" />
+                            </div>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="font-medium mb-1">Removendo fundo...</p>
+                          <p className="text-sm text-muted-foreground">Isso pode levar alguns segundos</p>
+                        </div>
+                        <Progress value={progressValue} className="w-full" />
+                      </Card>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex gap-2">
