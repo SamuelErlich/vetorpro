@@ -392,25 +392,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== USER ROUTES (Admin only) ==========
   
-  // Admin: Get users with filters
+  // Admin: Get users with filters (updated to include services)
   app.get("/api/admin/users", requireAdmin, async (req, res) => {
     try {
       const { status, search, sort } = req.query;
       
-      const filters: any = {};
+      // Get users with their services
+      const usersWithServices = await storage.getUsersWithServices();
+      
+      // Process each user to add computed fields and remove password
+      const processedUsers = usersWithServices.map(({ password, ...user }) => {
+        // Compute aggregated status from services for backward compatibility
+        let computedStatus = user.status || "INATIVO";
+        if (user.services && user.services.length > 0) {
+          const hasAtivo = user.services.some(s => s.status === "ATIVO");
+          const hasBloqueado = user.services.some(s => s.status === "BLOQUEADO");
+          const allInativo = user.services.every(s => s.status === "INATIVO");
+          
+          if (hasBloqueado) {
+            computedStatus = "BLOQUEADO";
+          } else if (hasAtivo) {
+            computedStatus = "ATIVO";
+          } else if (allInativo) {
+            computedStatus = "INATIVO";
+          }
+        }
+        
+        // Calculate total services and active services
+        const totalServices = user.services?.length || 0;
+        const activeServices = user.services?.filter(s => s.status === "ATIVO").length || 0;
+        
+        // Find the most recent payment across all services
+        let lastPaymentDate = user.ultimoPagamento;
+        if (user.services && user.services.length > 0) {
+          const servicePayments = user.services
+            .filter(s => s.ultimoPagamento)
+            .map(s => new Date(s.ultimoPagamento!));
+          
+          if (servicePayments.length > 0) {
+            const mostRecent = servicePayments.reduce((latest, current) => 
+              current > latest ? current : latest
+            );
+            lastPaymentDate = mostRecent;
+          }
+        }
+        
+        return {
+          ...user,
+          status: computedStatus, // Computed status for backward compatibility
+          computedStatus, // Also include as explicit field
+          totalServices,
+          activeServices,
+          lastPayment: lastPaymentDate ? lastPaymentDate.toISOString().split('T')[0] : user.ultimoPagamento ? new Date(user.ultimoPagamento).toISOString().split('T')[0] : null
+        };
+      });
+      
+      // Apply filters
+      let filteredUsers = processedUsers;
+      
       if (status && (status === "ATIVO" || status === "INATIVO" || status === "BLOQUEADO")) {
-        filters.status = status;
+        filteredUsers = filteredUsers.filter(user => user.computedStatus === status);
       }
+      
       if (search && typeof search === "string") {
-        filters.search = search;
+        const searchLower = search.toLowerCase();
+        filteredUsers = filteredUsers.filter(user => 
+          user.email.toLowerCase().includes(searchLower)
+        );
       }
+      
+      // Apply sorting
       if (sort && typeof sort === "string") {
-        filters.sort = sort;
+        switch (sort) {
+          case "ultimoPagamento_desc":
+            filteredUsers.sort((a, b) => {
+              const dateA = a.lastPayment ? new Date(a.lastPayment).getTime() : 0;
+              const dateB = b.lastPayment ? new Date(b.lastPayment).getTime() : 0;
+              return dateB - dateA;
+            });
+            break;
+          case "ultimoPagamento_asc":
+            filteredUsers.sort((a, b) => {
+              const dateA = a.lastPayment ? new Date(a.lastPayment).getTime() : 0;
+              const dateB = b.lastPayment ? new Date(b.lastPayment).getTime() : 0;
+              return dateA - dateB;
+            });
+            break;
+          case "cadastro_desc":
+            filteredUsers.sort((a, b) => b.id.localeCompare(a.id));
+            break;
+          case "cadastro_asc":
+            filteredUsers.sort((a, b) => a.id.localeCompare(b.id));
+            break;
+        }
       }
-
-      const users = await storage.getUsersWithFilters(filters);
-      const usersWithoutPasswords = users.map(({ password, ...user }) => user);
-      res.json(usersWithoutPasswords);
+      
+      res.json(filteredUsers);
     } catch (error) {
       console.error("Get users with filters error:", error);
       res.status(500).json({ error: "Erro ao buscar usuários" });
@@ -528,6 +605,134 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get user payments error:", error);
       res.status(500).json({ error: "Erro ao buscar pagamentos" });
+    }
+  });
+
+  // ========== USER SERVICES ROUTES (New for multi-service) ==========
+
+  // Admin: Get services for specific user
+  app.get("/api/admin/users/:userId/services", requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      
+      const user = await storage.getUserWithServices(userId);
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+      
+      // Remove password from response
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("Get user services error:", error);
+      res.status(500).json({ error: "Erro ao buscar serviços do usuário" });
+    }
+  });
+
+  // Admin: Update specific user-service relationship
+  app.patch("/api/admin/users/:userId/services/:serviceId", requireAdmin, async (req, res) => {
+    try {
+      const { userId, serviceId } = req.params;
+      const updates = req.body;
+      
+      // Find the user service record
+      const userService = await storage.getUserService(userId, serviceId);
+      if (!userService) {
+        return res.status(404).json({ error: "Assinatura não encontrada" });
+      }
+      
+      // Update the user service
+      const updatedUserService = await storage.updateUserService(userService.id, updates);
+      if (!updatedUserService) {
+        return res.status(500).json({ error: "Erro ao atualizar assinatura" });
+      }
+      
+      // Update the legacy users.status field for backward compatibility
+      // Compute aggregated status from all user services
+      const allUserServices = await storage.getUserServices(userId);
+      let computedStatus = "INATIVO";
+      
+      if (allUserServices.length > 0) {
+        const hasAtivo = allUserServices.some(s => s.status === "ATIVO");
+        const hasBloqueado = allUserServices.some(s => s.status === "BLOQUEADO");
+        const allInativo = allUserServices.every(s => s.status === "INATIVO");
+        
+        if (hasBloqueado) {
+          computedStatus = "BLOQUEADO";
+        } else if (hasAtivo) {
+          computedStatus = "ATIVO";
+        } else if (allInativo) {
+          computedStatus = "INATIVO";
+        }
+      }
+      
+      // Update the user's legacy status field
+      await storage.updateUser(userId, { status: computedStatus });
+      
+      res.json(updatedUserService);
+    } catch (error) {
+      console.error("Update user service error:", error);
+      res.status(500).json({ error: "Erro ao atualizar serviço do usuário" });
+    }
+  });
+
+  // Admin: Add new service to user (create subscription)
+  app.post("/api/admin/users/:userId/services", requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { serviceId, status = "INATIVO", creditsAvailable = 0 } = req.body;
+      
+      if (!serviceId) {
+        return res.status(400).json({ error: "serviceId é obrigatório" });
+      }
+      
+      // Check if user exists
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ error: "Usuário não encontrado" });
+      }
+      
+      // Check if service exists
+      const service = await storage.getService(serviceId);
+      if (!service) {
+        return res.status(404).json({ error: "Serviço não encontrado" });
+      }
+      
+      // Check if subscription already exists
+      const existingSubscription = await storage.getUserService(userId, serviceId);
+      if (existingSubscription) {
+        return res.status(400).json({ error: "Usuário já possui assinatura para este serviço" });
+      }
+      
+      // Create the subscription
+      const userService = await storage.createUserService({
+        userId,
+        serviceId,
+        status,
+        creditsAvailable,
+      });
+      
+      // Update the legacy users.status field for backward compatibility
+      const allUserServices = await storage.getUserServices(userId);
+      let computedStatus = "INATIVO";
+      
+      if (allUserServices.length > 0) {
+        const hasAtivo = allUserServices.some(s => s.status === "ATIVO");
+        const hasBloqueado = allUserServices.some(s => s.status === "BLOQUEADO");
+        
+        if (hasBloqueado) {
+          computedStatus = "BLOQUEADO";
+        } else if (hasAtivo) {
+          computedStatus = "ATIVO";
+        }
+      }
+      
+      await storage.updateUser(userId, { status: computedStatus });
+      
+      res.status(201).json(userService);
+    } catch (error) {
+      console.error("Add user service error:", error);
+      res.status(500).json({ error: "Erro ao adicionar serviço ao usuário" });
     }
   });
 

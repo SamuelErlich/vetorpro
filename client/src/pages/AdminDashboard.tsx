@@ -379,7 +379,13 @@ export default function AdminDashboard() {
                   {menuItems.map((item) => (
                     <SidebarMenuItem key={item.id}>
                       <SidebarMenuButton
-                        onClick={() => setActiveTab(item.id)}
+                        onClick={() => {
+                          if (item.id === "users") {
+                            setLocation('/admin/users');
+                          } else {
+                            setActiveTab(item.id);
+                          }
+                        }}
                         className={activeTab === item.id ? "bg-sidebar-accent" : ""}
                         data-testid={`link-${item.id}`}
                       >
@@ -408,37 +414,7 @@ export default function AdminDashboard() {
 
           <main className="flex-1 overflow-auto p-8">
             <div className="max-w-7xl mx-auto space-y-8">
-              {activeTab === "users" && (
-                <>
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-2xl font-bold">Gerenciar Usuários</h2>
-                    <Button onClick={handleExportCSV} variant="outline" data-testid="button-export-csv">
-                      <Download className="h-4 w-4 mr-2" />
-                      Exportar CSV
-                    </Button>
-                  </div>
-                  
-                  <AdminUsersFilters onFiltersChange={handleFiltersChange} />
-                  
-                  {usersLoading ? (
-                    <Skeleton className="h-96 w-full" />
-                  ) : (
-                    <AdminUserTable
-                      users={usersData?.map((u: any) => ({
-                        ...u,
-                        lastPayment: u.ultimoPagamento 
-                          ? new Date(u.ultimoPagamento).toLocaleDateString('pt-BR')
-                          : undefined,
-                      })) || []}
-                      onAdd={handleAddUser}
-                      onEdit={handleEditUser}
-                      onDelete={handleDeleteUser}
-                      onEditStatus={handleEditStatus}
-                      onViewPayments={handleViewPayments}
-                    />
-                  )}
-                </>
-              )}
+              {/* Users tab now redirects to /admin/users */}
 
               {activeTab === "credentials" && (
                 <>

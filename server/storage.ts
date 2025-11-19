@@ -43,6 +43,8 @@ export interface IStorage {
     search?: string;
     sort?: "ultimoPagamento_desc" | "ultimoPagamento_asc" | "cadastro_desc" | "cadastro_asc";
   }): Promise<User[]>;
+  getUsersWithServices(): Promise<(User & { services: (UserService & { service: Service })[] })[]>;
+  getUserWithServices(userId: string): Promise<(User & { services: (UserService & { service: Service })[] }) | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<User>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
@@ -211,6 +213,56 @@ export class MemStorage implements IStorage {
 
   async deleteUser(id: string): Promise<boolean> {
     return this.users.delete(id);
+  }
+
+  async getUsersWithServices(): Promise<(User & { services: (UserService & { service: Service })[] })[]> {
+    const allUsers = Array.from(this.users.values());
+    const result = [];
+    
+    for (const user of allUsers) {
+      const userServices = await this.getUserServices(user.id);
+      const servicesWithDetails = [];
+      
+      for (const us of userServices) {
+        const service = await this.getService(us.serviceId);
+        if (service) {
+          servicesWithDetails.push({
+            ...us,
+            service
+          });
+        }
+      }
+      
+      result.push({
+        ...user,
+        services: servicesWithDetails
+      });
+    }
+    
+    return result;
+  }
+
+  async getUserWithServices(userId: string): Promise<(User & { services: (UserService & { service: Service })[] }) | undefined> {
+    const user = await this.getUser(userId);
+    if (!user) return undefined;
+    
+    const userServices = await this.getUserServices(userId);
+    const servicesWithDetails = [];
+    
+    for (const us of userServices) {
+      const service = await this.getService(us.serviceId);
+      if (service) {
+        servicesWithDetails.push({
+          ...us,
+          service
+        });
+      }
+    }
+    
+    return {
+      ...user,
+      services: servicesWithDetails
+    };
   }
 
   // Services
@@ -685,6 +737,71 @@ class PostgresStorage implements IStorage {
   async deleteUser(id: string): Promise<boolean> {
     const result = await this.db.delete(users).where(eq(users.id, id)).returning();
     return result.length > 0;
+  }
+
+  async getUsersWithServices(): Promise<(User & { services: (UserService & { service: Service })[] })[]> {
+    // Get all users
+    const allUsers = await this.db.select().from(users);
+    
+    // Get all user services with service details in one query
+    const allUserServices = await this.db
+      .select({
+        userService: userServices,
+        service: services
+      })
+      .from(userServices)
+      .leftJoin(services, eq(userServices.serviceId, services.id));
+    
+    // Group services by user
+    const servicesByUser = new Map<string, (UserService & { service: Service })[]>();
+    for (const row of allUserServices) {
+      if (!row.userService || !row.service) continue;
+      
+      const userId = row.userService.userId;
+      if (!servicesByUser.has(userId)) {
+        servicesByUser.set(userId, []);
+      }
+      
+      servicesByUser.get(userId)!.push({
+        ...row.userService,
+        service: row.service
+      });
+    }
+    
+    // Combine users with their services
+    return allUsers.map(user => ({
+      ...user,
+      services: servicesByUser.get(user.id) || []
+    }));
+  }
+
+  async getUserWithServices(userId: string): Promise<(User & { services: (UserService & { service: Service })[] }) | undefined> {
+    // Get the user
+    const userResult = await this.db.select().from(users).where(eq(users.id, userId));
+    const user = userResult[0];
+    if (!user) return undefined;
+    
+    // Get user services with service details
+    const userServicesResult = await this.db
+      .select({
+        userService: userServices,
+        service: services
+      })
+      .from(userServices)
+      .leftJoin(services, eq(userServices.serviceId, services.id))
+      .where(eq(userServices.userId, userId));
+    
+    const servicesWithDetails = userServicesResult
+      .filter(row => row.userService && row.service)
+      .map(row => ({
+        ...row.userService!,
+        service: row.service!
+      }));
+    
+    return {
+      ...user,
+      services: servicesWithDetails
+    };
   }
 
   // Services
