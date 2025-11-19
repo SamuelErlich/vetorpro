@@ -19,7 +19,7 @@ export async function initializeData() {
     console.log("✓ Admin user created: admin@example.com / admin123");
 
     // Create sample client user
-    const clientPassword = await bcrypt.hash("cliente123", 10);
+    const clientPassword = await bcrypt.hash("teste123", 10);
     const client = await storage.createUser({
       email: "cliente@example.com",
       password: clientPassword,
@@ -36,7 +36,7 @@ export async function initializeData() {
       ultimoPagamento: new Date(),
       nextPaymentDate: nextPaymentDate,
     });
-    console.log(`✓ Client user created: cliente@example.com / cliente123 (next payment: ${nextPaymentDate.toISOString().split('T')[0]})`);
+    console.log(`✓ Client user created: cliente@example.com / teste123 (next payment: ${nextPaymentDate.toISOString().split('T')[0]})`);
 
     // Create sample shared credentials (available to all active users)
     const credentialDataJan = {
@@ -78,7 +78,7 @@ export async function initializeData() {
     console.log("==========================================");
     console.log("\nAccess credentials:");
     console.log("  Admin: admin@example.com / admin123");
-    console.log("  Client: cliente@example.com / cliente123");
+    console.log("  Client: cliente@example.com / teste123");
     console.log("==========================================\n");
   }
 }

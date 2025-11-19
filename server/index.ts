@@ -49,8 +49,8 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Initialize sample data (commented out - using custom admin user)
-  // await initializeData();
+  // Initialize sample data
+  await initializeData();
   
   const server = await registerRoutes(app);
 

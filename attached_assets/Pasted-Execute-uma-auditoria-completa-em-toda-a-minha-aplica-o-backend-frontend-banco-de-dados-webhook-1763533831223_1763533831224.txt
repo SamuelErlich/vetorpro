@@ -1,0 +1,48 @@
+Execute uma auditoria completa em toda a minha aplicação (backend, frontend, banco de dados, webhooks, cron jobs, autenticação, pagamentos e serviços). Não quero formatação especial, apenas instruções diretas e contínuas. Realize todas as etapas abaixo automaticamente, corrija o que for possível, teste novamente e entregue um relatório final.
+
+
+Validação geral do projeto:
+Verifique se o servidor inicializa sem erros ou avisos. Analise dependências, imports, rotas e organização interna do backend. Confira se o frontend builda corretamente usando Vite e se nada quebra no carregamento inicial.
+
+
+Testes automatizados de fluxo:
+Testar login com credenciais válidas e inválidas. Verificar sessões, cookies e renovações. Testar reset e criação de senha, incluindo token e validação. Testar registro de usuário pelo modal e criação de senha. Testar o fluxo completo do pagamento PIX, incluindo geração, QR Code, polling de status, webhook, atualização de status, desbloqueio e retorno.
+
+
+Teste completo do webhook PushinPay:
+Simular webhooks com diferentes status como paid, canceled, failed e valores variados. Testar webhooks sem header, com ID diferente e com end_to_end_id. Validar sincronização de TXID com o banco. Garantir idempotência verdadeira e que o sistema atualize pagamentos e UserServices corretamente. Confirmar que o webhook retorna sempre 200 OK.
+
+
+Teste de cron jobs:
+Simular manualmente execuções do dia 3, dia 4 e dia 6. Verificar envio de email via Resend. Confirmar bloqueio e desbloqueio de acessos. Verificar timezone America Sao Paulo.
+
+
+Auditoria do banco de dados:
+Validar tabelas Users, UserServices, Payments, Services e Credentials. Checar estrutura, relações, tipos, valores padrão e campos obrigatórios. Verificar se cada usuário possui UserServices para serviceId 1. Confirmar que todos os pagamentos possuem serviceId. Validar nextPaymentDate calculado.
+
+
+Teste do painel admin:
+Testar filtros, criação e edição de usuários, credenciais e pagamentos. Confirmar segurança das rotas admin. Verificar se o painel continua funcionando de maneira idêntica ao antes da expansão com serviceId.
+
+
+Limpeza e otimização:
+Remover código não utilizado, imports inúteis, duplicações e lógicas desnecessárias. Organizar funções e melhorar clareza de nomes. Fortalecer segurança de rotas e validações. Melhorar mensagens de erro, logs e consistência das respostas da API.
+
+
+Segurança:
+Validar sanitização de entrada, prevenção de SQL injection, proteção CSRF, cookies seguros, senhas com bcrypt, tokens temporários e permissões. Revisar autenticação do webhook e rotas restritas.
+
+
+Preparação para múltiplos serviços:
+Garantir que o backend está totalmente preparado para múltiplos serviços através de serviceId, sem alterar nenhuma parte da interface atual do usuário. Confirmar que toda a lógica atual permanece funcionando da mesma forma.
+
+
+Correções automáticas:
+Sempre que encontrar um erro, corrija automaticamente, valide novamente e continue até concluir.
+
+
+Relatório final:
+Gerar um relatório contendo erros encontrados, tudo que foi corrigido, itens de atenção, sugestões e confirmação de que o sistema está pronto para deploy.
+
+
+Execute tudo agora de forma contínua e sem solicitar confirmação.

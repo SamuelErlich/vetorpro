@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication UI Tests</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .test-controls {
+            margin-bottom: 20px;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .summary {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔒 Authentication UI Test Suite</h1>
+    <p>This test suite validates all authentication flows through the browser UI.</p>
+    
+    <div class="test-controls">
+        <button onclick="runAllTests()">▶️ Run All Tests</button>
+        <button onclick="clearResults()">🗑️ Clear Results</button>
+    </div>
+
+    <div id="test-results"></div>
+    
+    <div id="summary" class="summary" style="display:none;">
+        <h2>Test Summary</h2>
+        <div id="summary-content"></div>
+    </div>
+
+    <script>
+        const BASE_URL = window.location.origin;
+        const testResults = [];
+        
+        function log(message, type = 'info') {
+            const resultsDiv = document.getElementById('test-results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.innerHTML = `<pre>${message}</pre>`;
+            resultsDiv.appendChild(resultDiv);
+            
+            // Store for summary
+            testResults.push({ message, type });
+        }
+
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+            document.getElementById('summary').style.display = 'none';
+            testResults.length = 0;
+        }
+
+        async function apiRequest(endpoint, options = {}) {
+            try {
+                const response = await fetch(`${BASE_URL}${endpoint}`, {
+                    ...options,
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers,
+                    },
+                });
+                
+                const data = await response.json().catch(() => null);
+                
+                return {
+                    ok: response.ok,
+                    status: response.status,
+                    data,
+                    headers: response.headers
+                };
+            } catch (error) {
+                return {
+                    ok: false,
+                    status: 0,
+                    data: null,
+                    error: error.message
+                };
+            }
+        }
+
+        async function testClientLogin() {
+            log('═══════════════════════════════════════', 'info');
+            log('1️⃣ TESTING CLIENT LOGIN FLOW', 'info');
+            log('═══════════════════════════════════════', 'info');
+            
+            // Test 1.1: Valid credentials
+            log('Testing valid client credentials (teste123)...', 'info');
+            let result = await apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'cliente@example.com',
+                    password: 'teste123'
+                })
+            });
+            
+            if (result.ok) {
+                log('✅ Valid client login successful', 'success');
+                log(`User: ${JSON.stringify(result.data.user, null, 2)}`, 'info');
+                
+                // Test session persistence
+                const meResult = await apiRequest('/api/auth/me');
+                if (meResult.ok) {
+                    log('✅ Session created and persistent', 'success');
+                } else {
+                    log('❌ Session not properly created', 'error');
+                }
+                
+                // Logout for next test
+                await apiRequest('/api/auth/logout', { method: 'POST' });
+                log('Logged out for next test', 'info');
+            } else {
+                log(`❌ Login failed: ${result.data?.error}`, 'error');
+            }
+            
+            // Test 1.2: Invalid email
+            log('\nTesting invalid email...', 'info');
+            result = await apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'invalid@example.com',
+                    password: 'teste123'
+                })
+            });
+            
+            if (!result.ok && result.status === 401) {
+                log('✅ Invalid email correctly rejected', 'success');
+            } else {
+                log('❌ Invalid email not properly rejected', 'error');
+            }
+            
+            // Test 1.3: Invalid password
+            log('\nTesting invalid password...', 'info');
+            result = await apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'cliente@example.com',
+                    password: 'wrongpassword'
+                })
+            });
+            
+            if (!result.ok && result.status === 401) {
+                log('✅ Invalid password correctly rejected', 'success');
+            } else {
+                log('❌ Invalid password not properly rejected', 'error');
+            }
+        }
+
+        async function testAdminLogin() {
+            log('\n═══════════════════════════════════════', 'info');
+            log('2️⃣ TESTING ADMIN LOGIN FLOW', 'info');
+            log('═══════════════════════════════════════', 'info');
+            
+            // Test 2.1: Valid admin credentials
+            log('Testing valid admin credentials...', 'info');
+            let result = await apiRequest('/api/auth/admin/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'admin@example.com',
+                    password: 'admin123'
+                })
+            });
+            
+            if (result.ok && result.data?.user?.isAdmin === 'true') {
+                log('✅ Admin login successful', 'success');
+                log(`Admin user: ${JSON.stringify(result.data.user, null, 2)}`, 'info');
+                
+                // Test admin session
+                const meResult = await apiRequest('/api/auth/me');
+                if (meResult.ok && meResult.data?.user?.isAdmin === 'true') {
+                    log('✅ Admin role properly enforced', 'success');
+                } else {
+                    log('❌ Admin role not properly set', 'error');
+                }
+                
+                await apiRequest('/api/auth/logout', { method: 'POST' });
+            } else {
+                log('❌ Admin login failed', 'error');
+            }
+            
+            // Test 2.2: Non-admin trying admin login
+            log('\nTesting non-admin user on admin endpoint...', 'info');
+            result = await apiRequest('/api/auth/admin/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'cliente@example.com',
+                    password: 'teste123'
+                })
+            });
+            
+            if (!result.ok && result.status === 401) {
+                log('✅ Non-admin correctly rejected from admin login', 'success');
+            } else {
+                log('❌ Non-admin not properly rejected', 'error');
+            }
+        }
+
+        async function testRegistration() {
+            log('\n═══════════════════════════════════════', 'info');
+            log('3️⃣ TESTING REGISTRATION FLOW', 'info');
+            log('═══════════════════════════════════════', 'info');
+            
+            // Test 3.1: New user registration
+            const testEmail = `test_${Date.now()}@example.com`;
+            log(`Testing new user registration (${testEmail})...`, 'info');
+            
+            let result = await apiRequest('/api/auth/register', {
+                method: 'POST',
+                body: JSON.stringify({ email: testEmail })
+            });
+            
+            if (result.ok) {
+                log(`✅ New user registered: ${testEmail}`, 'success');
+                log(`Message: ${result.data?.message}`, 'info');
+            } else {
+                log(`❌ Registration failed: ${result.data?.error}`, 'error');
+            }
+            
+            // Test 3.2: Duplicate email (active user)
+            log('\nTesting duplicate email prevention...', 'info');
+            result = await apiRequest('/api/auth/register', {
+                method: 'POST',
+                body: JSON.stringify({ email: 'cliente@example.com' })
+            });
+            
+            if (!result.ok && result.status === 400) {
+                log('✅ Active user email correctly rejected', 'success');
+                log(`Error: ${result.data?.error}`, 'info');
+            } else {
+                log('❌ Duplicate email not properly rejected', 'error');
+            }
+            
+            // Test 3.3: Invalid email format
+            log('\nTesting invalid email format...', 'info');
+            result = await apiRequest('/api/auth/register', {
+                method: 'POST',
+                body: JSON.stringify({ email: 'not-an-email' })
+            });
+            
+            if (!result.ok && result.status === 400) {
+                log('✅ Invalid email format correctly rejected', 'success');
+            } else {
+                log('❌ Invalid email format not properly rejected', 'error');
+            }
+        }
+
+        async function testPasswordFlow() {
+            log('\n═══════════════════════════════════════', 'info');
+            log('4️⃣ TESTING PASSWORD CREATION FLOW', 'info');
+            log('═══════════════════════════════════════', 'info');
+            
+            // Test invalid token
+            log('Testing invalid token validation...', 'info');
+            let result = await apiRequest('/api/auth/validate-token/invalid-token-123');
+            
+            if (!result.ok && result.status === 400) {
+                log('✅ Invalid token correctly rejected', 'success');
+            } else {
+                log('❌ Invalid token not properly rejected', 'error');
+            }
+            
+            // Test password creation with invalid token
+            log('\nTesting password creation with invalid token...', 'info');
+            result = await apiRequest('/api/auth/create-password', {
+                method: 'POST',
+                body: JSON.stringify({
+                    token: 'invalid-token-123',
+                    password: 'newpassword123'
+                })
+            });
+            
+            if (!result.ok && result.status === 400) {
+                log('✅ Password creation with invalid token rejected', 'success');
+            } else {
+                log('❌ Invalid token not properly validated', 'error');
+            }
+            
+            // Test password too short
+            log('\nTesting password validation (too short)...', 'info');
+            result = await apiRequest('/api/auth/create-password', {
+                method: 'POST',
+                body: JSON.stringify({
+                    token: 'some-token',
+                    password: '123'
+                })
+            });
+            
+            if (!result.ok && result.data?.error?.includes('mínimo')) {
+                log('✅ Short password correctly rejected', 'success');
+                log(`Error: ${result.data.error}`, 'info');
+            } else {
+                log('❌ Short password not properly validated', 'error');
+            }
+        }
+
+        async function testSessionManagement() {
+            log('\n═══════════════════════════════════════', 'info');
+            log('5️⃣ TESTING SESSION MANAGEMENT', 'info');
+            log('═══════════════════════════════════════', 'info');
+            
+            // Login and test session
+            log('Testing session creation and persistence...', 'info');
+            let result = await apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'cliente@example.com',
+                    password: 'teste123'
+                })
+            });
+            
+            if (result.ok) {
+                log('✅ Login successful', 'success');
+                
+                // Check session cookie
+                const hasCookie = document.cookie.includes('connect.sid');
+                if (hasCookie) {
+                    log('✅ Session cookie created', 'success');
+                    log(`Cookies: ${document.cookie}`, 'info');
+                } else {
+                    log('⚠️ Session cookie not visible (may be httpOnly)', 'warning');
+                }
+                
+                // Test session persistence
+                const meResult1 = await apiRequest('/api/auth/me');
+                if (meResult1.ok) {
+                    log('✅ Session persists across requests', 'success');
+                } else {
+                    log('❌ Session not persisting', 'error');
+                }
+                
+                // Test logout
+                log('\nTesting logout...', 'info');
+                const logoutResult = await apiRequest('/api/auth/logout', { method: 'POST' });
+                const meResult2 = await apiRequest('/api/auth/me');
+                
+                if (logoutResult.ok && meResult2.status === 401) {
+                    log('✅ Logout successful, session destroyed', 'success');
+                } else {
+                    log('❌ Logout or session destruction failed', 'error');
+                }
+            } else {
+                log('❌ Initial login failed', 'error');
+            }
+            
+            // Test concurrent sessions
+            log('\nTesting session handling (sequential logins)...', 'info');
+            
+            // Login as client
+            await apiRequest('/api/auth/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'cliente@example.com',
+                    password: 'teste123'
+                })
+            });
+            
+            const clientSession = await apiRequest('/api/auth/me');
+            log(`First login (client): ${clientSession.data?.user?.email}`, 'info');
+            
+            // Login as admin (overwrites session)
+            await apiRequest('/api/auth/admin/login', {
+                method: 'POST',
+                body: JSON.stringify({
+                    email: 'admin@example.com',
+                    password: 'admin123'
+                })
+            });
+            
+            const adminSession = await apiRequest('/api/auth/me');
+            log(`Second login (admin): ${adminSession.data?.user?.email}`, 'info');
+            
+            if (adminSession.data?.user?.email === 'admin@example.com') {
+                log('✅ Session correctly updated to last login', 'success');
+            } else {
+                log('❌ Session not properly updated', 'error');
+            }
+            
+            // Cleanup
+            await apiRequest('/api/auth/logout', { method: 'POST' });
+        }
+
+        async function testUIComponents() {
+            log('\n═══════════════════════════════════════', 'info');
+            log('6️⃣ TESTING UI COMPONENTS', 'info');
+            log('═══════════════════════════════════════', 'info');
+            
+            // Test client login page
+            log('Testing client login page accessibility...', 'info');
+            try {
+                const response = await fetch('/');
+                if (response.ok) {
+                    log('✅ Client login page accessible', 'success');
+                } else {
+                    log('❌ Client login page not accessible', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error accessing client login: ${error.message}`, 'error');
+            }
+            
+            // Test admin login page
+            log('Testing admin login page accessibility...', 'info');
+            try {
+                const response = await fetch('/admin');
+                if (response.ok) {
+                    log('✅ Admin login page accessible', 'success');
+                } else {
+                    log('❌ Admin login page not accessible', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error accessing admin login: ${error.message}`, 'error');
+            }
+            
+            // Test password creation page
+            log('Testing password creation page...', 'info');
+            try {
+                const response = await fetch('/criar-senha?token=test');
+                if (response.ok) {
+                    log('✅ Password creation page accessible', 'success');
+                } else {
+                    log('❌ Password creation page not accessible', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error accessing password creation: ${error.message}`, 'error');
+            }
+        }
+
+        async function runAllTests() {
+            clearResults();
+            log('🚀 Starting Authentication Test Suite', 'info');
+            log(`Testing against: ${BASE_URL}`, 'info');
+            log(`Time: ${new Date().toLocaleString()}`, 'info');
+            
+            await testClientLogin();
+            await testAdminLogin();
+            await testRegistration();
+            await testPasswordFlow();
+            await testSessionManagement();
+            await testUIComponents();
+            
+            // Show summary
+            showSummary();
+        }
+
+        function showSummary() {
+            const summaryDiv = document.getElementById('summary');
+            const summaryContent = document.getElementById('summary-content');
+            
+            const successCount = testResults.filter(r => r.type === 'success').length;
+            const errorCount = testResults.filter(r => r.type === 'error').length;
+            const warningCount = testResults.filter(r => r.type === 'warning').length;
+            
+            summaryContent.innerHTML = `
+                <p><strong>✅ Passed:</strong> ${successCount}</p>
+                <p><strong>❌ Failed:</strong> ${errorCount}</p>
+                <p><strong>⚠️ Warnings:</strong> ${warningCount}</p>
+                <hr>
+                <p><strong>Total Tests:</strong> ${successCount + errorCount}</p>
+                <p><strong>Success Rate:</strong> ${((successCount / (successCount + errorCount)) * 100).toFixed(1)}%</p>
+            `;
+            
+            summaryDiv.style.display = 'block';
+            
+            log('\n═══════════════════════════════════════', 'info');
+            log('✨ Test Suite Complete!', 'info');
+            log(`Results: ${successCount} passed, ${errorCount} failed, ${warningCount} warnings`, 'info');
+        }
+    </script>
+</body>
+</html>
