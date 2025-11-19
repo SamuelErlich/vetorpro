@@ -1168,16 +1168,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const webhookSecret = process.env.PUSHINPAY_WEBHOOK_SECRET;
       
       if (!webhookSecret) {
-        console.error("CRITICAL: PUSHINPAY_WEBHOOK_SECRET not configured");
-        return res.status(401).json({ error: "Unauthorized" });
+        console.error("❌ WEBHOOK REJECTED: PUSHINPAY_WEBHOOK_SECRET not configured in Replit Secrets");
+        console.error("📝 Configure the secret: Tools → Secrets → Add PUSHINPAY_WEBHOOK_SECRET");
+        return res.status(401).json({ error: "Unauthorized - webhook secret not configured" });
       }
       
       // CRITICAL: PushinPay uses X-Token header or Authorization Bearer
       const receivedToken = req.headers['x-token'] as string | undefined;
       const receivedAuth = req.headers['authorization'] as string | undefined;
       
+      // DEBUG: Log headers for troubleshooting (in development only)
+      if (process.env.NODE_ENV !== "production") {
+        console.log("🔍 [WEBHOOK DEBUG] Headers received:");
+        console.log("  X-Token:", receivedToken ? `${receivedToken.substring(0, 10)}...` : "NOT PROVIDED");
+        console.log("  Authorization:", receivedAuth ? `${receivedAuth.substring(0, 20)}...` : "NOT PROVIDED");
+      }
+      
       if (!receivedToken && !receivedAuth) {
-        return res.status(401).json({ error: "Unauthorized" });
+        console.error("❌ WEBHOOK REJECTED: No authentication header (X-Token or Authorization)");
+        return res.status(401).json({ error: "Unauthorized - missing authentication header" });
       }
       
       // Normalize received secret (trim whitespace)
@@ -1189,19 +1198,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Use constant-time comparison to prevent timing attacks
       let isValid = false;
+      let matchType = "";
+      
       try {
         // Compare with direct secret (X-Token)
         if (normalizedReceived.length === expectedDirect.length) {
           const receivedBuf = Buffer.from(normalizedReceived, 'utf8');
           const expectedBuf = Buffer.from(expectedDirect, 'utf8');
-          isValid = crypto.timingSafeEqual(receivedBuf, expectedBuf);
+          if (crypto.timingSafeEqual(receivedBuf, expectedBuf)) {
+            isValid = true;
+            matchType = "X-Token (direct)";
+          }
         }
         
         // Compare with Bearer format (Authorization)
         if (!isValid && normalizedReceived.length === expectedBearer.length) {
           const receivedBuf = Buffer.from(normalizedReceived, 'utf8');
           const expectedBuf = Buffer.from(expectedBearer, 'utf8');
-          isValid = crypto.timingSafeEqual(receivedBuf, expectedBuf);
+          if (crypto.timingSafeEqual(receivedBuf, expectedBuf)) {
+            isValid = true;
+            matchType = "Authorization Bearer";
+          }
         }
       } catch (error) {
         // timingSafeEqual throws if buffer lengths don't match
@@ -1209,8 +1226,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!isValid) {
-        return res.status(401).json({ error: "Unauthorized" });
+        console.error("❌ WEBHOOK REJECTED: Token mismatch");
+        console.error(`  Received length: ${normalizedReceived.length}`);
+        console.error(`  Expected direct length: ${expectedDirect.length}`);
+        console.error(`  Expected bearer length: ${expectedBearer.length}`);
+        console.error("⚠️  Check that PUSHINPAY_WEBHOOK_SECRET matches the value configured in PushinPay dashboard");
+        return res.status(401).json({ error: "Unauthorized - invalid token" });
       }
+      
+      console.log(`✅ Webhook authenticated via ${matchType}`);
       
       // CRITICAL: PushinPay may send nested transaction object
       // SECURITY: Only trust txid from body root, ignore nested IDs to prevent forgery

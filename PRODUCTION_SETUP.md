@@ -24,14 +24,29 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 **Onde obter:** Dashboard PushinPay
 **Formato:** Token fornecido pela PushinPay
 
-### 4. PUSHINPAY_WEBHOOK_SECRET ⚠️ CRÍTICO
-**Status:** ❌ NÃO CONFIGURADO - SECURITY RISK!
+### 4. PUSHINPAY_WEBHOOK_SECRET ⚠️ CRÍTICO - OBRIGATÓRIO!
+**Status:** ❌ NÃO CONFIGURADO - CAUSANDO ERRO 401 NO WEBHOOK!
 **Descrição:** Chave secreta para validar webhooks da PushinPay
-**Como gerar:**
+**Como configurar:**
+
+1. Gere uma chave forte:
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
-**Importante:** Configure a mesma chave no dashboard da PushinPay
+
+2. Configure no Replit:
+   - Tools → Secrets → New Secret
+   - Key: `PUSHINPAY_WEBHOOK_SECRET`
+   - Value: Cole a chave gerada
+   
+3. Configure NO DASHBOARD PUSHINPAY:
+   - Acesse Configurações → Webhooks
+   - Cole A MESMA CHAVE no campo Secret/Token
+   - URL: `https://SEU-DOMINIO.replit.dev/api/webhook/pushinpay`
+
+**ATENÇÃO:** A chave DEVE ser EXATAMENTE igual em ambos os lugares!
+
+📖 **Guia completo:** Veja `WEBHOOK_PUSHINPAY_SETUP.md`
 
 ## 📧 Secrets para Email (Resend)
 
