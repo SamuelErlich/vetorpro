@@ -7,6 +7,9 @@ import { initializePaymentCron } from "./jobs/paymentCron";
 
 const app = express();
 
+// Trust proxy for rate limiting to work properly in Replit
+app.set('trust proxy', true);
+
 // CORS Configuration
 const corsOptions: cors.CorsOptions = {
   origin: function (origin, callback) {

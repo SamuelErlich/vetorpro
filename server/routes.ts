@@ -11,21 +11,25 @@ import { manualTriggers } from "./jobs/paymentCron";
 import { sendEmail, emailTemplates } from "./utils/email";
 import { DEFAULT_SERVICE_ID } from "@shared/constants";
 
-// Rate limiters configuration
+// Rate limiters configuration - more lenient in development
+const isProduction = process.env.NODE_ENV === 'production';
+
 const authRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP to 5 requests per windowMs
+  max: isProduction ? 5 : 20, // Development: 20 attempts, Production: 5 attempts
   message: "Muitas tentativas de login. Por favor, tente novamente em 15 minutos.",
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skipFailedRequests: true, // Don't count failed requests
 });
 
 const adminLoginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 3, // Limit each IP to 3 requests per windowMs (stricter for admin)
+  max: isProduction ? 3 : 10, // Development: 10 attempts, Production: 3 attempts
   message: "Muitas tentativas de login administrativo. Por favor, tente novamente em 15 minutos.",
   standardHeaders: true,
   legacyHeaders: false,
+  skipFailedRequests: true, // Don't count failed requests
 });
 
 const paymentsRateLimiter = rateLimit({
