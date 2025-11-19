@@ -57,8 +57,8 @@ export default function ImageModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden p-0">
-        <DialogHeader className="p-6 pb-0">
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col p-0">
+        <DialogHeader className="p-6 pb-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-xl">{title}</DialogTitle>
             <Button
@@ -99,7 +99,7 @@ export default function ImageModal({
           )}
         </DialogHeader>
 
-        <div className="p-6">
+        <div className="flex-1 overflow-auto px-6 pb-6 min-h-0">
           {hasBothImages && showComparison ? (
             <Tabs defaultValue={defaultTab} className="w-full">
               <TabsList className="grid w-full grid-cols-3 mb-4">
@@ -114,67 +114,90 @@ export default function ImageModal({
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="comparison" className="mt-0">
-                <BeforeAfterSlider
-                  beforeImage={originalImage}
-                  afterImage={processedImage}
-                  beforeLabel="Original"
-                  afterLabel="Sem Fundo"
-                  className="w-full max-h-[60vh]"
-                />
-              </TabsContent>
-
-              <TabsContent value="original" className="mt-0">
-                <div className="space-y-4">
-                  <ImagePreview
-                    src={originalImage}
-                    alt="Original"
-                    className="w-full max-h-[60vh]"
-                    showZoomControls
+              <TabsContent value="comparison" className="mt-0 flex flex-col">
+                <div className="flex-1 min-h-0 mb-4">
+                  <BeforeAfterSlider
+                    beforeImage={originalImage}
+                    afterImage={processedImage}
+                    beforeLabel="Original"
+                    afterLabel="Sem Fundo"
+                    className="w-full h-full max-h-[50vh]"
                   />
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
                   <Button
                     onClick={() => handleDownload("original")}
-                    className="w-full"
-                    data-testid="button-download-original-full"
+                    className="flex-1"
+                    variant="outline"
+                    data-testid="button-download-original-comp"
                   >
                     <Download className="h-4 w-4 mr-2" />
                     Baixar Original
                   </Button>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="processed" className="mt-0">
-                <div className="space-y-4">
-                  <ImagePreview
-                    src={processedImage}
-                    alt="Processada"
-                    className="w-full max-h-[60vh]"
-                    showZoomControls
-                  />
                   <Button
                     onClick={() => handleDownload("processed")}
-                    className="w-full"
-                    data-testid="button-download-processed-full"
+                    className="flex-1"
+                    data-testid="button-download-processed-comp"
                   >
                     <Download className="h-4 w-4 mr-2" />
-                    Baixar Processada
+                    Baixar Sem Fundo
                   </Button>
                 </div>
               </TabsContent>
-            </Tabs>
-          ) : (
-            <div className="space-y-4">
-              {processedImage ? (
-                <>
+
+              <TabsContent value="original" className="mt-0 flex flex-col">
+                <div className="flex-1 min-h-0 mb-4">
+                  <ImagePreview
+                    src={originalImage}
+                    alt="Original"
+                    className="w-full h-full max-h-[50vh]"
+                    showZoomControls
+                  />
+                </div>
+                <Button
+                  onClick={() => handleDownload("original")}
+                  className="w-full flex-shrink-0"
+                  data-testid="button-download-original-full"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Baixar Original
+                </Button>
+              </TabsContent>
+
+              <TabsContent value="processed" className="mt-0 flex flex-col">
+                <div className="flex-1 min-h-0 mb-4">
                   <ImagePreview
                     src={processedImage}
                     alt="Processada"
-                    className="w-full max-h-[60vh]"
+                    className="w-full h-full max-h-[50vh]"
                     showZoomControls
                   />
+                </div>
+                <Button
+                  onClick={() => handleDownload("processed")}
+                  className="w-full flex-shrink-0"
+                  data-testid="button-download-processed-full"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Baixar Sem Fundo
+                </Button>
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <div className="flex flex-col h-full">
+              {processedImage ? (
+                <>
+                  <div className="flex-1 min-h-0 mb-4">
+                    <ImagePreview
+                      src={processedImage}
+                      alt="Processada"
+                      className="w-full h-full max-h-[50vh]"
+                      showZoomControls
+                    />
+                  </div>
                   <Button
                     onClick={() => handleDownload("processed")}
-                    className="w-full"
+                    className="w-full flex-shrink-0"
                     data-testid="button-download-single"
                   >
                     <Download className="h-4 w-4 mr-2" />
@@ -183,15 +206,17 @@ export default function ImageModal({
                 </>
               ) : originalImage ? (
                 <>
-                  <ImagePreview
-                    src={originalImage}
-                    alt="Original"
-                    className="w-full max-h-[60vh]"
-                    showZoomControls
-                  />
+                  <div className="flex-1 min-h-0 mb-4">
+                    <ImagePreview
+                      src={originalImage}
+                      alt="Original"
+                      className="w-full h-full max-h-[50vh]"
+                      showZoomControls
+                    />
+                  </div>
                   <Button
                     onClick={() => handleDownload("original")}
-                    className="w-full"
+                    className="w-full flex-shrink-0"
                     data-testid="button-download-single"
                   >
                     <Download className="h-4 w-4 mr-2" />
