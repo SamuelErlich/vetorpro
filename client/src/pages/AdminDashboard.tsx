@@ -15,6 +15,8 @@ import AdminRemoveBgStats from "@/components/AdminRemoveBgStats";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import UserFormDialog from "@/components/UserFormDialog";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -31,8 +33,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { Credential, Payment, User as UserType } from "@shared/schema";
-import { CreditCard, Download, Key, LogOut, Users, Image, BarChart3 } from "lucide-react";
+import type { Credential, Payment, User as UserType, Service } from "@shared/schema";
+import { CreditCard, Download, Key, LogOut, Users, Image, BarChart3, Settings } from "lucide-react";
 
 type AuthMeResponse = { user: UserType };
 type PaymentWithUser = Payment & { userEmail: string };
@@ -98,6 +100,11 @@ export default function AdminDashboard() {
 
   const { data: credentialsData, isLoading: credentialsLoading } = useQuery<Credential[]>({
     queryKey: ['/api/admin/credentials'],
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
+  });
+
+  const { data: servicesData, isLoading: servicesLoading } = useQuery<(Service & { activeSubscribers?: number; totalSubscribers?: number })[]>({
+    queryKey: ['/api/admin/services'],
     enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
@@ -240,6 +247,7 @@ export default function AdminDashboard() {
 
   const menuItems = [
     { title: "Usuários", icon: Users, id: "users" },
+    { title: "Serviços", icon: Settings, id: "services" },
     { title: "Credenciais", icon: Key, id: "credentials" },
     { title: "Pagamentos", icon: CreditCard, id: "payments" },
     { title: "RemoveBG", icon: Image, id: "removebg" },
@@ -514,6 +522,65 @@ export default function AdminDashboard() {
                       <AdminRemoveBgStats />
                     </TabsContent>
                   </Tabs>
+                </div>
+              )}
+
+              {activeTab === "services" && (
+                <div className="space-y-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold">Gerenciar Serviços</h2>
+                  </div>
+
+                  {servicesLoading ? (
+                    <Skeleton className="h-96 w-full" />
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {servicesData?.map((service) => (
+                        <Card 
+                          key={service.id} 
+                          className="cursor-pointer hover-elevate"
+                          onClick={() => setLocation(`/admin/services/${service.id}`)}
+                        >
+                          <CardHeader>
+                            <div className="flex items-center justify-between">
+                              <CardTitle>{service.nome}</CardTitle>
+                              <Badge variant={service.ativo ? "default" : "secondary"}>
+                                {service.ativo ? "Ativo" : "Inativo"}
+                              </Badge>
+                            </div>
+                            <CardDescription>{service.descricao || "Sem descrição"}</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-2">
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Preço:</span>
+                                <span className="font-medium">R$ {service.preco}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Assinantes Ativos:</span>
+                                <span className="font-medium">{service.activeSubscribers || 0}</span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">Total de Assinantes:</span>
+                                <span className="font-medium">{service.totalSubscribers || 0}</span>
+                              </div>
+                            </div>
+                            <Button 
+                              className="w-full mt-4" 
+                              variant="outline"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLocation(`/admin/services/${service.id}`);
+                              }}
+                              data-testid={`button-manage-service-${service.id}`}
+                            >
+                              Gerenciar Serviço
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

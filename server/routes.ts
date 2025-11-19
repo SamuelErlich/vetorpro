@@ -2134,6 +2134,164 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========== SERVICE MANAGEMENT ROUTES ==========
+
+  // Get service details with subscribers
+  app.get("/api/admin/services/:serviceId", requireAdmin, async (req, res) => {
+    try {
+      const { serviceId } = req.params;
+      const service = await storage.getService(serviceId);
+      
+      if (!service) {
+        return res.status(404).json({ error: "Serviço não encontrado" });
+      }
+
+      // Get subscribers for this service
+      const userServices = await storage.getUserServicesByServiceId(serviceId);
+      
+      // Enrich with user data
+      const subscribers = await Promise.all(
+        userServices.map(async (us) => {
+          const user = await storage.getUser(us.userId);
+          return {
+            ...us,
+            user: user ? {
+              id: user.id,
+              email: user.email,
+              status: user.status,
+            } : undefined,
+          };
+        })
+      );
+
+      res.json({
+        ...service,
+        subscribers,
+      });
+    } catch (error) {
+      console.error("Error fetching service details:", error);
+      res.status(500).json({ error: "Erro ao buscar detalhes do serviço" });
+    }
+  });
+
+  // Get credentials for a specific service
+  app.get("/api/admin/services/:serviceId/credentials", requireAdmin, async (req, res) => {
+    try {
+      const { serviceId } = req.params;
+      const credentials = await storage.getCredentialsByServiceId(serviceId);
+      res.json(credentials);
+    } catch (error) {
+      console.error("Error fetching service credentials:", error);
+      res.status(500).json({ error: "Erro ao buscar credenciais do serviço" });
+    }
+  });
+
+  // Get usage data for a service (currently only for RemoveBG)
+  app.get("/api/admin/services/:serviceId/usage", requireAdmin, async (req, res) => {
+    try {
+      const { serviceId } = req.params;
+      
+      if (serviceId === "removebg-001") {
+        const allUsage = await storage.getAllRemoveBgUsage();
+        
+        // Add user data
+        const usageWithUsers = await Promise.all(
+          allUsage.map(async (usage) => {
+            const user = await storage.getUser(usage.userId);
+            return {
+              ...usage,
+              user: user ? {
+                id: user.id,
+                email: user.email,
+              } : undefined,
+            };
+          })
+        );
+        
+        // Sort by date desc
+        usageWithUsers.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        
+        res.json(usageWithUsers.slice(0, 100)); // Return last 100 entries
+      } else {
+        res.json([]);
+      }
+    } catch (error) {
+      console.error("Error fetching service usage:", error);
+      res.status(500).json({ error: "Erro ao buscar uso do serviço" });
+    }
+  });
+
+  // Update service details
+  app.patch("/api/admin/services/:serviceId", requireAdmin, async (req, res) => {
+    try {
+      const { serviceId } = req.params;
+      const updates = req.body;
+      
+      const service = await storage.updateService(serviceId, updates);
+      
+      if (!service) {
+        return res.status(404).json({ error: "Serviço não encontrado" });
+      }
+      
+      res.json(service);
+    } catch (error) {
+      console.error("Error updating service:", error);
+      res.status(500).json({ error: "Erro ao atualizar serviço" });
+    }
+  });
+
+  // Toggle user service status (activate/deactivate)
+  app.patch("/api/admin/services/:serviceId/users/:userId/status", requireAdmin, async (req, res) => {
+    try {
+      const { serviceId, userId } = req.params;
+      const { status } = req.body;
+      
+      if (!["ATIVO", "INATIVO", "BLOQUEADO"].includes(status)) {
+        return res.status(400).json({ error: "Status inválido" });
+      }
+      
+      const userService = await storage.getUserService(userId, serviceId);
+      
+      if (!userService) {
+        return res.status(404).json({ error: "Assinatura não encontrada" });
+      }
+      
+      const updated = await storage.updateUserService(userService.id, { status });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating user service status:", error);
+      res.status(500).json({ error: "Erro ao atualizar status" });
+    }
+  });
+
+  // Get all services (for admin listing)
+  app.get("/api/admin/services", requireAdmin, async (req, res) => {
+    try {
+      const services = await storage.getAllServices();
+      
+      // Add subscriber counts
+      const servicesWithCounts = await Promise.all(
+        services.map(async (service) => {
+          const userServices = await storage.getUserServicesByServiceId(service.id);
+          const activeCount = userServices.filter(us => us.status === "ATIVO").length;
+          const totalCount = userServices.length;
+          
+          return {
+            ...service,
+            activeSubscribers: activeCount,
+            totalSubscribers: totalCount,
+          };
+        })
+      );
+      
+      res.json(servicesWithCounts);
+    } catch (error) {
+      console.error("Error fetching services:", error);
+      res.status(500).json({ error: "Erro ao buscar serviços" });
+    }
+  });
+
   // ========== REMOVEBG ROUTES ==========
   app.use("/api/removebg", removeBgRoutes);
 

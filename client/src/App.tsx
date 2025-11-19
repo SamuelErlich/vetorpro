@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { queryClient } from "@/lib/queryClient";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminLogin from "@/pages/AdminLogin";
+import AdminServiceDetails from "@/pages/AdminServiceDetails";
 import ClientDashboard from "@/pages/ClientDashboard";
 import ClientLogin from "@/pages/ClientLogin";
 import CriarSenha from "@/pages/CriarSenha";
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/admin/login" component={AdminLogin} />
       <Route path="/dashboard" component={ClientDashboard} />
       <Route path="/admin" component={AdminDashboard} />
+      <Route path="/admin/services/:serviceId" component={AdminServiceDetails} />
       <Route path="/payment" component={PaymentPage} />
       <Route path="/criar-senha" component={CriarSenha} />
       <Route component={NotFound} />
