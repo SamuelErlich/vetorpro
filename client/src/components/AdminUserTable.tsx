@@ -10,7 +10,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Edit, Trash2, UserPlus } from "lucide-react";
+import { Edit, Trash2, UserPlus, History, Settings } from "lucide-react";
 
 interface User {
   id: string;
@@ -24,9 +24,18 @@ interface AdminUserTableProps {
   onAdd: () => void;
   onEdit: (userId: string) => void;
   onDelete: (userId: string) => void;
+  onEditStatus?: (userId: string) => void;
+  onViewPayments?: (userId: string) => void;
 }
 
-export default function AdminUserTable({ users, onAdd, onEdit, onDelete }: AdminUserTableProps) {
+export default function AdminUserTable({ 
+  users, 
+  onAdd, 
+  onEdit, 
+  onDelete, 
+  onEditStatus, 
+  onViewPayments 
+}: AdminUserTableProps) {
   return (
     <Card>
       <CardHeader>
@@ -76,11 +85,34 @@ export default function AdminUserTable({ users, onAdd, onEdit, onDelete }: Admin
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
+                      {onEditStatus && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onEditStatus(user.id)}
+                          data-testid={`button-edit-status-${user.id}`}
+                          title="Editar Status"
+                        >
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {onViewPayments && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => onViewPayments(user.id)}
+                          data-testid={`button-view-payments-${user.id}`}
+                          title="Ver Pagamentos"
+                        >
+                          <History className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"
                         onClick={() => onEdit(user.id)}
                         data-testid={`button-edit-${user.id}`}
+                        title="Editar Usuário"
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
@@ -89,6 +121,7 @@ export default function AdminUserTable({ users, onAdd, onEdit, onDelete }: Admin
                         variant="ghost"
                         onClick={() => onDelete(user.id)}
                         data-testid={`button-delete-${user.id}`}
+                        title="Deletar Usuário"
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>

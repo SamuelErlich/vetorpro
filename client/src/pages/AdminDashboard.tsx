@@ -14,7 +14,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Users, CreditCard, Key, LogOut } from "lucide-react";
+import { Users, CreditCard, Key, LogOut, Download } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import AdminUserTable from "@/components/AdminUserTable";
 import AdminPaymentTable from "@/components/AdminPaymentTable";
@@ -22,6 +22,9 @@ import AdminCredentialTable from "@/components/AdminCredentialTable";
 import UserFormDialog from "@/components/UserFormDialog";
 import CreateUserDialog from "@/components/CreateUserDialog";
 import CredentialFormDialog from "@/components/CredentialFormDialog";
+import AdminUsersFilters from "@/components/AdminUsersFilters";
+import EditStatusDialog from "@/components/EditStatusDialog";
+import PaymentHistoryDrawer from "@/components/PaymentHistoryDrawer";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,6 +42,17 @@ export default function AdminDashboard() {
   const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
   const [editingCredential, setEditingCredential] = useState<any>(null);
+  
+  // New states for filters and dialogs
+  const [userFilters, setUserFilters] = useState<{
+    status?: string;
+    search?: string;
+    sort?: string;
+  }>({});
+  const [editStatusDialogOpen, setEditStatusDialogOpen] = useState(false);
+  const [editingStatusUser, setEditingStatusUser] = useState<any>(null);
+  const [paymentHistoryDrawerOpen, setPaymentHistoryDrawerOpen] = useState(false);
+  const [viewingPaymentsUser, setViewingPaymentsUser] = useState<any>(null);
 
   // Check authentication
   const { data: currentUser, isLoading: authLoading } = useQuery<AuthMeResponse>({
@@ -53,9 +67,19 @@ export default function AdminDashboard() {
     }
   }, [currentUser, authLoading, setLocation]);
 
-  // Fetch data
+  // Fetch data with filters
   const { data: usersData, isLoading: usersLoading } = useQuery<UserType[]>({
-    queryKey: ['/api/users'],
+    queryKey: ["admin-users", userFilters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (userFilters.status) params.append("status", userFilters.status);
+      if (userFilters.search) params.append("search", userFilters.search);
+      if (userFilters.sort) params.append("sort", userFilters.sort);
+      
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
+      if (!res.ok) throw new Error("Erro ao buscar usuários");
+      return res.json();
+    },
     enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
@@ -86,7 +110,7 @@ export default function AdminDashboard() {
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "Usuário criado com sucesso!" });
     },
     onError: (error: any) => {
@@ -106,7 +130,7 @@ export default function AdminDashboard() {
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "Usuário atualizado com sucesso!" });
     },
     onError: (error: any) => {
@@ -122,7 +146,7 @@ export default function AdminDashboard() {
     mutationFn: (id: string) =>
       apiRequest(`/api/users/${id}`, { method: 'DELETE' }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/users'] });
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
       toast({ title: "Usuário deletado com sucesso!" });
     },
     onError: (error: any) => {
@@ -249,6 +273,47 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleFiltersChange = (filters: any) => {
+    setUserFilters(filters);
+  };
+
+  const handleEditStatus = (userId: string) => {
+    const user = usersData?.find((u: any) => u.id === userId);
+    setEditingStatusUser(user);
+    setEditStatusDialogOpen(true);
+  };
+
+  const handleViewPayments = (userId: string) => {
+    const user = usersData?.find((u: any) => u.id === userId);
+    setViewingPaymentsUser(user);
+    setPaymentHistoryDrawerOpen(true);
+  };
+
+  const handleExportCSV = async () => {
+    try {
+      const res = await fetch("/api/admin/users/export");
+      if (!res.ok) throw new Error("Erro ao exportar usuários");
+      
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `usuarios-${new Date().toISOString().split("T")[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast({ title: "Arquivo exportado com sucesso!" });
+    } catch (error: any) {
+      toast({
+        title: "Erro ao exportar",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
   const style = {
     "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
@@ -308,6 +373,16 @@ export default function AdminDashboard() {
             <div className="max-w-7xl mx-auto space-y-8">
               {activeTab === "users" && (
                 <>
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold">Gerenciar Usuários</h2>
+                    <Button onClick={handleExportCSV} variant="outline" data-testid="button-export-csv">
+                      <Download className="h-4 w-4 mr-2" />
+                      Exportar CSV
+                    </Button>
+                  </div>
+                  
+                  <AdminUsersFilters onFiltersChange={handleFiltersChange} />
+                  
                   {usersLoading ? (
                     <Skeleton className="h-96 w-full" />
                   ) : (
@@ -321,6 +396,8 @@ export default function AdminDashboard() {
                       onAdd={handleAddUser}
                       onEdit={handleEditUser}
                       onDelete={handleDeleteUser}
+                      onEditStatus={handleEditStatus}
+                      onViewPayments={handleViewPayments}
                     />
                   )}
                 </>
@@ -380,6 +457,25 @@ export default function AdminDashboard() {
         onSubmit={handleSubmitCredential}
         credential={editingCredential}
       />
+
+      {editingStatusUser && (
+        <EditStatusDialog
+          open={editStatusDialogOpen}
+          onOpenChange={setEditStatusDialogOpen}
+          userId={editingStatusUser.id}
+          currentStatus={editingStatusUser.status}
+          userEmail={editingStatusUser.email}
+        />
+      )}
+
+      {viewingPaymentsUser && (
+        <PaymentHistoryDrawer
+          open={paymentHistoryDrawerOpen}
+          onOpenChange={setPaymentHistoryDrawerOpen}
+          userId={viewingPaymentsUser.id}
+          userEmail={viewingPaymentsUser.email}
+        />
+      )}
     </SidebarProvider>
   );
 }
