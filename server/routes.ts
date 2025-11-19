@@ -1746,20 +1746,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email: z.string().email("Email inválido"),
         status: z.enum(["ATIVO", "PENDENTE", "INATIVO", "BLOQUEADO"]).optional(),
         sendEmail: z.boolean().optional().default(true),
-        password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").optional(),
+        password: z.string().optional(),
       }).refine((data) => {
-        // If not sending email, password is required
-        if (!data.sendEmail && !data.password) {
+        // If not sending email, password is required and must be at least 6 characters
+        if (data.sendEmail === false && (!data.password || data.password.length < 6)) {
           return false;
         }
         return true;
       }, {
-        message: "Senha é obrigatória quando o envio de email está desativado",
+        message: "Senha é obrigatória (mínimo 6 caracteres) quando o envio de email está desativado",
         path: ["password"],
       });
 
       const validatedData = createUserEmailSchema.parse(req.body);
-      const { email, status, sendEmail, password } = validatedData;
+      const { email, status, sendEmail: shouldSendEmail, password } = validatedData;
 
       // Check if email already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -1769,7 +1769,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Hash password if provided
       let hashedPassword = null;
-      if (password && !sendEmail) {
+      if (password && !shouldSendEmail) {
         hashedPassword = await bcrypt.hash(password, 10);
       }
 
@@ -1777,13 +1777,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser({
         email,
         password: hashedPassword, // Will be null if sending email, or hashed password if manual
-        status: status || (sendEmail ? "PENDENTE" : "ATIVO"), // Default to ATIVO if password is set manually
+        status: status || (shouldSendEmail ? "PENDENTE" : "ATIVO"), // Default to ATIVO if password is set manually
         isAdmin: "false",
         discount: 0, // Default discount
       });
 
-      // Only create password reset token and send email if sendEmail is true
-      if (sendEmail) {
+      // Only create password reset token and send email if shouldSendEmail is true
+      if (shouldSendEmail) {
         // Generate secure token
         const token = crypto.randomBytes(32).toString("hex");
 
