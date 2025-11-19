@@ -1745,10 +1745,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const createUserEmailSchema = z.object({
         email: z.string().email("Email inválido"),
         status: z.enum(["ATIVO", "PENDENTE", "INATIVO", "BLOQUEADO"]).optional(),
+        sendEmail: z.boolean().optional().default(true),
+        password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").optional(),
+      }).refine((data) => {
+        // If not sending email, password is required
+        if (!data.sendEmail && !data.password) {
+          return false;
+        }
+        return true;
+      }, {
+        message: "Senha é obrigatória quando o envio de email está desativado",
+        path: ["password"],
       });
 
       const validatedData = createUserEmailSchema.parse(req.body);
-      const { email, status } = validatedData;
+      const { email, status, sendEmail, password } = validatedData;
 
       // Check if email already exists
       const existingUser = await storage.getUserByEmail(email);
@@ -1756,55 +1767,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Email já cadastrado" });
       }
 
-      // Create user without password
+      // Hash password if provided
+      let hashedPassword = null;
+      if (password && !sendEmail) {
+        hashedPassword = await bcrypt.hash(password, 10);
+      }
+
+      // Create user with or without password
       const user = await storage.createUser({
         email,
-        password: null, // Will be set by user via email link
-        status: status || "PENDENTE",
+        password: hashedPassword, // Will be null if sending email, or hashed password if manual
+        status: status || (sendEmail ? "PENDENTE" : "ATIVO"), // Default to ATIVO if password is set manually
         isAdmin: "false",
         discount: 0, // Default discount
       });
 
-      // Generate secure token
-      const token = crypto.randomBytes(32).toString("hex");
+      // Only create password reset token and send email if sendEmail is true
+      if (sendEmail) {
+        // Generate secure token
+        const token = crypto.randomBytes(32).toString("hex");
 
-      // Create password reset token (valid for 24 hours)
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + 24);
+        // Create password reset token (valid for 24 hours)
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24);
 
-      await storage.createPasswordReset({
-        userId: user.id,
-        token,
-        expiresAt,
-      });
+        await storage.createPasswordReset({
+          userId: user.id,
+          token,
+          expiresAt,
+        });
 
-      // Send email with password creation link
-      const template = emailTemplates.createPassword(email, token);
-      const emailSent = await sendEmail({
-        to: email,
-        subject: template.subject,
-        html: template.html,
-      });
+        // Send email with password creation link
+        const template = emailTemplates.createPassword(email, token);
+        const emailSent = await sendEmail({
+          to: email,
+          subject: template.subject,
+          html: template.html,
+        });
 
-      if (!emailSent) {
-        // User was created but email failed - still return success but warn
-        console.warn(`⚠️  User created but email failed to send to ${email}`);
-        return res.json({
+        if (!emailSent) {
+          // User was created but email failed - still return success but warn
+          console.warn(`⚠️  User created but email failed to send to ${email}`);
+          return res.json({
+            success: true,
+            user: { id: user.id, email: user.email, status: user.status },
+            emailSent: false,
+            warning: "Usuário criado mas o email não pôde ser enviado. Configure RESEND_API_KEY.",
+          });
+        }
+
+        console.log(`✅ [CREATE-USER] User created and email sent to ${email}`);
+
+        res.json({
+          success: true,
+          user: { id: user.id, email: user.email, status: user.status },
+          emailSent: true,
+          message: `Usuário criado! Um email foi enviado para ${email} com instruções para criar a senha.`,
+        });
+      } else {
+        // User created with manual password, no email sent
+        console.log(`✅ [CREATE-USER] User created with manual password for ${email}`);
+
+        res.json({
           success: true,
           user: { id: user.id, email: user.email, status: user.status },
           emailSent: false,
-          warning: "Usuário criado mas o email não pôde ser enviado. Configure RESEND_API_KEY.",
+          message: `Usuário criado com senha definida manualmente.`,
         });
       }
-
-      console.log(`✅ [CREATE-USER] User created and email sent to ${email}`);
-
-      res.json({
-        success: true,
-        user: { id: user.id, email: user.email, status: user.status },
-        emailSent: true,
-        message: `Usuário criado! Um email foi enviado para ${email} com instruções para criar a senha.`,
-      });
     } catch (error: any) {
       // Handle Zod validation errors
       if (error.name === 'ZodError') {
