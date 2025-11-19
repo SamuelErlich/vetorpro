@@ -95,10 +95,20 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
             <div className="space-y-2">
               <p className="text-lg font-medium">Serviço Inativo</p>
               <p className="text-sm text-muted-foreground max-w-md">
-                Seu serviço RemoveBG está inativo. Entre em contato com o suporte
-                ou aguarde a ativação do pagamento.
+                Seu serviço RemoveBG está inativo. Escolha um plano para continuar
+                usando o serviço de remoção de fundo.
               </p>
             </div>
+            {onSubscribe && (
+              <Button 
+                size="sm" 
+                onClick={onSubscribe}
+                data-testid="button-choose-plan-removebg"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                Escolher Plano
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

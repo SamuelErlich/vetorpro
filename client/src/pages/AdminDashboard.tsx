@@ -246,6 +246,7 @@ export default function AdminDashboard() {
   });
 
   const menuItems = [
+    { title: "Serviços", icon: Settings, id: "services" },
     { title: "Usuários", icon: Users, id: "users" },
     { title: "Pagamentos", icon: CreditCard, id: "payments" },
     { title: "RemoveBG", icon: Image, id: "removebg" },
