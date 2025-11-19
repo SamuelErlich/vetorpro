@@ -49,16 +49,15 @@ export default function CredentialsCard({ month, credentials, isLocked }: Creden
         return;
       }
 
-      // Copy email and password to clipboard
-      const credentialsText = `${data.email}\t${data.senha}`;
-      await navigator.clipboard.writeText(credentialsText);
+      // Copy ONLY password to clipboard (email is pre-filled by SSO URL)
+      await navigator.clipboard.writeText(data.senha);
 
-      // Open Vectorizer SSO URL in new tab
+      // Open Vectorizer SSO URL in new tab (email already pre-filled)
       window.open(data.url, '_blank');
       
       toast({
         title: "✅ Senha copiada!",
-        description: "A senha do Vectorizer foi copiada. Cole na página que acabou de abrir.",
+        description: "Cole no campo de senha do Vectorizer (email já está preenchido)",
         duration: 5000,
       });
     } catch (error) {
@@ -139,7 +138,7 @@ export default function CredentialsCard({ month, credentials, isLocked }: Creden
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Ao clicar: copia sua senha e abre o Vectorizer</p>
+                  <p>Copia sua senha e abre o Vectorizer (email já preenchido)</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
