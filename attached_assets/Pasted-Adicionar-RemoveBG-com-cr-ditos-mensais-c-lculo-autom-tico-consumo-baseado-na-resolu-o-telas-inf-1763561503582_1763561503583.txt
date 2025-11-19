@@ -1,0 +1,79 @@
+Adicionar RemoveBG com créditos mensais, cálculo automático, consumo baseado na resolução, telas informativas e total compatibilidade com o sistema atual.
+
+Implemente na aplicação VectorPro o módulo de Remoção de Fundo usando a API RemoveBG, com sistema de créditos mensais e cálculo automático de consumo baseado na resolução da imagem. A implementação deve ser 100 pct compatível com a estrutura atual e não pode quebrar nenhuma funcionalidade existente. Toda a UI atual deve continuar funcionando. Apenas adicionar o novo módulo RemoveBG expansível.
+
+Objetivos principais:
+
+Criar suporte completo para RemoveBG via API Key interna definida como variável de ambiente REMOVE_BG_API_KEY
+
+Criar sistema de créditos mensais para os usuários com três planos fixos
+Plano Start 30 créditos
+Plano Pro 120 créditos
+Plano Studio 300 créditos
+
+Créditos são renovados mensalmente no dia 5, seguindo o mesmo ciclo dos demais serviços, integrado ao UserServices
+
+Créditos não acumulam. Sempre substituem o valor do mês
+
+Implementar cálculo automático de consumo por imagem seguindo a regra abaixo
+Até 1 MP = 1 crédito
+Até 4 MP = 2 créditos
+Até 25 MP = 3 créditos
+Acima disso rejeitar requisição
+
+Criar endpoint para upload da imagem, envio para RemoveBG e retorno do arquivo processado. Debitar créditos apenas quando RemoveBG retornar sucesso
+
+Criar estrutura no backend
+Tabela UserServices já existe. Crie ServiceId separado para RemoveBG
+Tabela Payments já aceita serviceId. Use isso para cobrança futura
+Criar tabela RemoveBgUsage para registrar cada remoção
+Campos
+id
+userId
+serviceId
+creditsUsed
+resolutionMp
+createdAt
+
+Criar rota segura no backend para uso
+POST /api/removebg/process
+Recebe arquivo (multipart)
+Valida créditos
+Calcula resolução
+Debita créditos
+Envia para RemoveBG
+Retorna imagem resultante
+
+Atualizar Admin Panel para permitir
+Visualizar total de créditos do usuário
+Ajustar créditos manualmente
+Histórico de uso RemoveBG
+
+Criar explicação para o usuário no front-end em modal ou tooltip com texto curto
+Como funciona o consumo de créditos
+Imagens até 1 MP consomem 1 crédito
+Imagens até 4 MP consomem 2 créditos
+Imagens até 25 MP consomem 3 créditos
+
+Regras importantes:
+Nao modificar nada do fluxo Vectorizer.
+Nao alterar painel de login.
+Nao mudar lógica de pagamento atual.
+Nao quebrar serviceId 1.
+Apenas adicionar serviço novo com serviceId próprio para RemoveBG.
+Toda a UI atual deve permanecer intacta.
+Adicionar apenas o card RemoveBG no painel do usuário se serviceId estiver ATIVO.
+Se o usuário não assinou RemoveBG, exibir botão Assinar para este serviço.
+Assinatura RemoveBG deve seguir o mesmo fluxo atual de pagamento PushinPay já implementado.
+Toda a lógica de crédito deve ser isolada e modular sem interferir nos outros serviços.
+
+Indicadores adicionais para o Replit decidir:
+O Replit pode escolher a melhor estrutura interna para o módulo RemoveBG.
+Pode criar controllers, services e repos separados.
+Pode usar bibliotecas de upload já existentes ou incluir nova se necessário.
+Pode adaptar a melhor forma de ler a resolução da imagem no backend.
+Não pode alterar ou quebrar endpoints existentes.
+Não pode alterar o comportamento do Vectorizer.
+
+Objetivo final:
+Adicionar suporte completo ao RemoveBG com créditos mensais, cálculo automático de custo por resolução, histórico de uso e controle de créditos, tudo integrado ao sistema atual sem impactar nenhuma funcionalidade existente.
