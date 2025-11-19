@@ -374,7 +374,6 @@ export default function AdminDashboard() {
         open={credentialDialogOpen}
         onClose={() => setCredentialDialogOpen(false)}
         onSubmit={handleSubmitCredential}
-        users={usersData || []}
         credential={editingCredential}
       />
     </SidebarProvider>
