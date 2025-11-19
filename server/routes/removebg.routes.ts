@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import multer from "multer";
 import { removeBgService } from "../services/removebg.service";
+import { storage } from "../storage";
 
 const router = Router();
 
@@ -157,6 +158,87 @@ router.post("/estimate", requireAuth, upload.single("image"), async (req: Reques
     res.status(500).json({ 
       error: "Failed to estimate credits" 
     });
+  }
+});
+
+/**
+ * DELETE /api/removebg/usage/:id
+ * Delete a single RemoveBG usage record and its images
+ */
+router.delete("/usage/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.session.userId!;
+    const usageId = req.params.id;
+    
+    // First verify the usage record belongs to this user
+    const usage = await storage.getRemoveBgUsageByUserId(userId);
+    const record = usage.find(u => u.id === usageId);
+    
+    if (!record) {
+      return res.status(404).json({ error: "Usage record not found" });
+    }
+    
+    // Delete the files if they exist
+    if (record.originalImagePath || record.imagePath) {
+      await removeBgService.deleteImages(record.originalImagePath, record.imagePath);
+    }
+    
+    // Delete the database record
+    const deleted = await storage.deleteRemoveBgUsage(usageId);
+    
+    if (!deleted) {
+      return res.status(500).json({ error: "Failed to delete usage record" });
+    }
+    
+    res.json({ success: true, message: "Usage record deleted successfully" });
+  } catch (error: any) {
+    console.error("Error deleting RemoveBG usage:", error);
+    res.status(500).json({ error: "Failed to delete usage record" });
+  }
+});
+
+/**
+ * DELETE /api/removebg/usage/batch
+ * Delete multiple RemoveBG usage records and their images
+ */
+router.delete("/usage/batch", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.session.userId!;
+    const { ids } = req.body;
+    
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Invalid or empty IDs array" });
+    }
+    
+    // Verify all usage records belong to this user
+    const userUsage = await storage.getRemoveBgUsageByUserId(userId);
+    const userUsageIds = new Set(userUsage.map(u => u.id));
+    
+    const validIds = ids.filter(id => userUsageIds.has(id));
+    
+    if (validIds.length === 0) {
+      return res.status(404).json({ error: "No valid usage records found" });
+    }
+    
+    // Delete files for all valid records
+    for (const id of validIds) {
+      const record = userUsage.find(u => u.id === id);
+      if (record && (record.originalImagePath || record.imagePath)) {
+        await removeBgService.deleteImages(record.originalImagePath, record.imagePath);
+      }
+    }
+    
+    // Delete the database records
+    const deletedCount = await storage.deleteRemoveBgUsageByIds(validIds);
+    
+    res.json({ 
+      success: true, 
+      message: `Deleted ${deletedCount} usage records`,
+      deletedCount 
+    });
+  } catch (error: any) {
+    console.error("Error deleting RemoveBG usage batch:", error);
+    res.status(500).json({ error: "Failed to delete usage records" });
   }
 });
 

@@ -277,6 +277,89 @@ export class RemoveBgService {
   async getPlans() {
     return await storage.getRemoveBgPlans();
   }
+
+  /**
+   * Delete images from filesystem
+   * @param originalPath Original image path
+   * @param processedPath Processed image path
+   */
+  async deleteImages(originalPath: string | null, processedPath: string | null) {
+    const promises: Promise<void>[] = [];
+    
+    if (originalPath) {
+      promises.push(
+        fs.promises.unlink(path.join(process.cwd(), originalPath)).catch((err: any) => {
+          console.error(`Failed to delete original image ${originalPath}:`, err);
+        })
+      );
+    }
+    
+    if (processedPath) {
+      promises.push(
+        fs.promises.unlink(path.join(process.cwd(), processedPath)).catch((err: any) => {
+          console.error(`Failed to delete processed image ${processedPath}:`, err);
+        })
+      );
+    }
+    
+    await Promise.all(promises);
+  }
+
+  /**
+   * Clean up old images (older than specified days)
+   * @param days Number of days to keep images
+   * @returns Number of deleted records
+   */
+  async cleanupOldImages(days: number = 7): Promise<number> {
+    const oldUsage = await storage.getRemoveBgUsageOlderThan(days);
+    
+    // Delete files
+    for (const record of oldUsage) {
+      if (record.originalImagePath || record.imagePath) {
+        await this.deleteImages(record.originalImagePath, record.imagePath);
+      }
+    }
+    
+    // Delete database records
+    const ids = oldUsage.map(u => u.id);
+    if (ids.length > 0) {
+      return await storage.deleteRemoveBgUsageByIds(ids);
+    }
+    
+    return 0;
+  }
+
+  /**
+   * Enforce user image limit
+   * @param userId User ID
+   * @param maxImages Maximum number of images to keep
+   * @returns Number of deleted records
+   */
+  async enforceUserImageLimit(userId: string, maxImages: number = 30): Promise<number> {
+    const count = await storage.countUserRemoveBgUsage(userId);
+    
+    if (count <= maxImages) {
+      return 0;
+    }
+    
+    // Get records to delete (keeping only the newest maxImages)
+    const allUsage = await storage.getRemoveBgUsageByUserId(userId);
+    const sortedUsage = allUsage.sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+    
+    const toDelete = sortedUsage.slice(maxImages);
+    
+    // Delete files
+    for (const record of toDelete) {
+      if (record.originalImagePath || record.imagePath) {
+        await this.deleteImages(record.originalImagePath, record.imagePath);
+      }
+    }
+    
+    // Delete database records
+    return await storage.deleteOldestUserRemoveBgUsage(userId, maxImages);
+  }
 }
 
 export const removeBgService = new RemoveBgService();
