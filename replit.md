@@ -38,6 +38,13 @@ Drizzle Kit is used for schema migrations.
 
 A **role-based access** model is implemented, differentiating between client users (access to own data) and admin users (full system access). `requireAuth` and `requireAdmin` middleware protect routes, with frontend guards checking authentication status.
 
+**Credential Isolation Security (November 2025):**
+- **Multi-service isolation**: Users only see credentials for their active subscriptions
+- **getCredentialsByUserAndServices()**: New secure method filters by userId AND serviceIds
+- **Admin validation**: Even admins cannot create credentials for services users don't have
+- **20 security tests**: Complete test coverage for credential access control
+- **Zero trust model**: Every credential access validates user ownership and service subscription
+
 ### User Registration
 
 The system supports **two methods** for user onboarding:
