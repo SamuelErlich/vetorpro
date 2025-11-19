@@ -105,7 +105,9 @@ export default function ServiceDetails() {
         credentials: "include",
       });
       if (!response.ok) throw new Error("Failed to fetch plans");
-      return response.json();
+      const result = await response.json();
+      // Extract plans from the data property
+      return result.data || [];
     },
     enabled: serviceId === "removebg-001",
   });
@@ -451,7 +453,8 @@ export default function ServiceDetails() {
                     service.subscribers.map((subscriber) => {
                       const isEditing = !!editingUserPlans[subscriber.userId];
                       const editingPlan = editingUserPlans[subscriber.userId];
-                      const currentPlan = removeBgPlans?.find(p => p.id === subscriber.planId);
+                      const plansArray = Array.isArray(removeBgPlans) ? removeBgPlans : [];
+                      const currentPlan = plansArray.find(p => p.id === subscriber.planId);
                       
                       return (
                         <div
@@ -485,7 +488,7 @@ export default function ServiceDetails() {
                                             [subscriber.userId]: {
                                               ...prev[subscriber.userId],
                                               planId: value || null,
-                                              credits: removeBgPlans?.find(p => p.id === value)?.credits || prev[subscriber.userId]?.credits || 0
+                                              credits: plansArray.find(p => p.id === value)?.credits || prev[subscriber.userId]?.credits || 0
                                             }
                                           }))}
                                         >
@@ -494,7 +497,7 @@ export default function ServiceDetails() {
                                           </SelectTrigger>
                                           <SelectContent>
                                             <SelectItem value="">Sem plano</SelectItem>
-                                            {removeBgPlans?.map(plan => (
+                                            {plansArray.map(plan => (
                                               <SelectItem key={plan.id} value={plan.id}>
                                                 {plan.name} - R${plan.price} ({plan.credits} créditos)
                                               </SelectItem>
