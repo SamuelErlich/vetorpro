@@ -1,6 +1,10 @@
 import { 
   type User, 
   type InsertUser,
+  type Service,
+  type InsertService,
+  type UserService,
+  type InsertUserService,
   type Credential,
   type InsertCredential,
   type Payment,
@@ -8,6 +12,8 @@ import {
   type PasswordReset,
   type InsertPasswordReset,
   users,
+  services,
+  userServices,
   credentials,
   payments,
   passwordResets
@@ -15,7 +21,7 @@ import {
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
 import { neon } from "@neondatabase/serverless";
-import { eq, isNull, or, like, desc, asc } from "drizzle-orm";
+import { eq, isNull, or, like, desc, asc, and } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -30,6 +36,20 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, user: Partial<User>): Promise<User | undefined>;
   deleteUser(id: string): Promise<boolean>;
+  
+  // Services
+  getService(id: string): Promise<Service | undefined>;
+  getActiveServices(): Promise<Service[]>;
+  getAllServices(): Promise<Service[]>;
+  createService(service: InsertService): Promise<Service>;
+  updateService(id: string, service: Partial<Service>): Promise<Service | undefined>;
+  
+  // User Services (Subscriptions)
+  getUserService(userId: string, serviceId: string): Promise<UserService | undefined>;
+  getUserServices(userId: string): Promise<UserService[]>;
+  getUserServicesByServiceId(serviceId: string): Promise<UserService[]>;
+  createUserService(userService: InsertUserService): Promise<UserService>;
+  updateUserService(id: string, userService: Partial<UserService>): Promise<UserService | undefined>;
   
   // Credentials
   getCredential(id: string): Promise<Credential | undefined>;
@@ -57,12 +77,16 @@ export interface IStorage {
 
 export class MemStorage implements IStorage {
   private users: Map<string, User>;
+  private services: Map<string, Service>;
+  private userServices: Map<string, UserService>;
   private credentials: Map<string, Credential>;
   private payments: Map<string, Payment>;
   private passwordResets: Map<string, PasswordReset>;
 
   constructor() {
     this.users = new Map();
+    this.services = new Map();
+    this.userServices = new Map();
     this.credentials = new Map();
     this.payments = new Map();
     this.passwordResets = new Map();
@@ -147,6 +171,87 @@ export class MemStorage implements IStorage {
 
   async deleteUser(id: string): Promise<boolean> {
     return this.users.delete(id);
+  }
+
+  // Services
+  async getService(id: string): Promise<Service | undefined> {
+    return this.services.get(id);
+  }
+
+  async getActiveServices(): Promise<Service[]> {
+    return Array.from(this.services.values()).filter(
+      (service) => service.ativo === true,
+    );
+  }
+
+  async getAllServices(): Promise<Service[]> {
+    return Array.from(this.services.values());
+  }
+
+  async createService(insertService: InsertService): Promise<Service> {
+    const id = randomUUID();
+    const service: Service = {
+      id,
+      nome: insertService.nome,
+      descricao: insertService.descricao ?? null,
+      preco: insertService.preco,
+      ativo: insertService.ativo ?? true,
+      createdAt: new Date(),
+    };
+    this.services.set(id, service);
+    return service;
+  }
+
+  async updateService(id: string, updates: Partial<Service>): Promise<Service | undefined> {
+    const service = this.services.get(id);
+    if (!service) return undefined;
+    
+    const updatedService = { ...service, ...updates };
+    this.services.set(id, updatedService);
+    return updatedService;
+  }
+
+  // User Services (Subscriptions)
+  async getUserService(userId: string, serviceId: string): Promise<UserService | undefined> {
+    return Array.from(this.userServices.values()).find(
+      (us) => us.userId === userId && us.serviceId === serviceId,
+    );
+  }
+
+  async getUserServices(userId: string): Promise<UserService[]> {
+    return Array.from(this.userServices.values()).filter(
+      (us) => us.userId === userId,
+    );
+  }
+
+  async getUserServicesByServiceId(serviceId: string): Promise<UserService[]> {
+    return Array.from(this.userServices.values()).filter(
+      (us) => us.serviceId === serviceId,
+    );
+  }
+
+  async createUserService(insertUserService: InsertUserService): Promise<UserService> {
+    const id = randomUUID();
+    const userService: UserService = {
+      id,
+      userId: insertUserService.userId,
+      serviceId: insertUserService.serviceId,
+      status: insertUserService.status || "INATIVO",
+      ultimoPagamento: insertUserService.ultimoPagamento ?? null,
+      proximoPagamento: insertUserService.proximoPagamento ?? null,
+      createdAt: new Date(),
+    };
+    this.userServices.set(id, userService);
+    return userService;
+  }
+
+  async updateUserService(id: string, updates: Partial<UserService>): Promise<UserService | undefined> {
+    const userService = this.userServices.get(id);
+    if (!userService) return undefined;
+    
+    const updatedUserService = { ...userService, ...updates };
+    this.userServices.set(id, updatedUserService);
+    return updatedUserService;
   }
 
   // Credentials
@@ -352,6 +457,58 @@ class PostgresStorage implements IStorage {
   async deleteUser(id: string): Promise<boolean> {
     const result = await this.db.delete(users).where(eq(users.id, id)).returning();
     return result.length > 0;
+  }
+
+  // Services
+  async getService(id: string): Promise<Service | undefined> {
+    const result = await this.db.select().from(services).where(eq(services.id, id));
+    return result[0];
+  }
+
+  async getActiveServices(): Promise<Service[]> {
+    return await this.db.select().from(services).where(eq(services.ativo, true));
+  }
+
+  async getAllServices(): Promise<Service[]> {
+    return await this.db.select().from(services);
+  }
+
+  async createService(insertService: InsertService): Promise<Service> {
+    const result = await this.db.insert(services).values(insertService).returning();
+    return result[0];
+  }
+
+  async updateService(id: string, updates: Partial<Service>): Promise<Service | undefined> {
+    const result = await this.db.update(services).set(updates).where(eq(services.id, id)).returning();
+    return result[0];
+  }
+
+  // User Services (Subscriptions)
+  async getUserService(userId: string, serviceId: string): Promise<UserService | undefined> {
+    const result = await this.db.select().from(userServices)
+      .where(and(
+        eq(userServices.userId, userId),
+        eq(userServices.serviceId, serviceId)
+      ));
+    return result[0];
+  }
+
+  async getUserServices(userId: string): Promise<UserService[]> {
+    return await this.db.select().from(userServices).where(eq(userServices.userId, userId));
+  }
+
+  async getUserServicesByServiceId(serviceId: string): Promise<UserService[]> {
+    return await this.db.select().from(userServices).where(eq(userServices.serviceId, serviceId));
+  }
+
+  async createUserService(insertUserService: InsertUserService): Promise<UserService> {
+    const result = await this.db.insert(userServices).values(insertUserService).returning();
+    return result[0];
+  }
+
+  async updateUserService(id: string, updates: Partial<UserService>): Promise<UserService | undefined> {
+    const result = await this.db.update(userServices).set(updates).where(eq(userServices.id, id)).returning();
+    return result[0];
   }
 
   // Credentials

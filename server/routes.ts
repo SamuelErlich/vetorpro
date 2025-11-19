@@ -564,7 +564,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/admin/credentials", requireAdmin, async (req, res) => {
     try {
       const validatedData = insertCredentialSchema.parse(req.body);
-      const credential = await storage.createCredential(validatedData);
+      // Set default serviceId if not provided
+      const credentialData = {
+        ...validatedData,
+        serviceId: validatedData.serviceId || "vectorizer-001"
+      };
+      const credential = await storage.createCredential(credentialData);
       res.status(201).json(credential);
     } catch (error) {
       console.error("Create credential error:", error);
@@ -847,6 +852,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create payment record with OUR transaction ID (amount in cents as string)
       const payment = await storage.createPayment({
         userId: req.session.userId!,
+        serviceId: "vectorizer-001", // Default service for all payments
         amount: amountInCents.toString(), // Store cents as string (decimal column)
         status: "pending",
         txid: ourTxid, // CRITICAL: Use our own TXID
@@ -1063,6 +1069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create payment record with PAID status
       const payment = await storage.createPayment({
         userId,
+        serviceId: "vectorizer-001", // Default service for all payments
         amount: amount.toString(),
         status: "paid",
         txid: `SIMULATED-${Date.now()}`,
@@ -1074,12 +1081,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       nextPaymentDate.setDate(5); // Day 5
       nextPaymentDate.setHours(0, 0, 0, 0); // Midnight
 
-      // Update user: set status to ATIVO, update ultimoPagamento and nextPaymentDate
+      // Update user: set status to ATIVO, update ultimoPagamento and nextPaymentDate (for compatibility)
       await storage.updateUser(userId, {
         status: "ATIVO",
         ultimoPagamento: new Date(),
         nextPaymentDate,
       });
+
+      // Also update or create UserService for vectorizer-001
+      const serviceId = payment.serviceId || "vectorizer-001";
+      const existingUserService = await storage.getUserService(userId, serviceId);
+      
+      if (existingUserService) {
+        // Update existing UserService
+        await storage.updateUserService(existingUserService.id, {
+          status: "ATIVO",
+          ultimoPagamento: new Date(),
+          proximoPagamento: nextPaymentDate,
+        });
+      } else {
+        // Create new UserService
+        await storage.createUserService({
+          userId,
+          serviceId: serviceId,
+          status: "ATIVO",
+          ultimoPagamento: new Date(),
+          proximoPagamento: nextPaymentDate,
+        });
+      }
 
       console.log(`✅ [SIMULATE-PAYMENT] User ${user.email} payment simulated. Next payment: ${nextPaymentDate.toISOString().split('T')[0]}`);
 
@@ -1245,12 +1274,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
         nextPaymentDate.setDate(5); // Day 5
         nextPaymentDate.setHours(0, 0, 0, 0); // Start of day
         
-        // Update user status, payment date, and next payment date
+        // Update user status, payment date, and next payment date (for compatibility)
         await storage.updateUser(payment.userId, {
           status: "ATIVO",
           ultimoPagamento: new Date(),
           nextPaymentDate: nextPaymentDate, // Set next vencimento (day 5 of next month)
         });
+        
+        // Also update or create UserService for vectorizer-001
+        const serviceId = payment.serviceId || "vectorizer-001"; // Use payment's serviceId or default
+        const existingUserService = await storage.getUserService(payment.userId, serviceId);
+        
+        if (existingUserService) {
+          // Update existing UserService
+          await storage.updateUserService(existingUserService.id, {
+            status: "ATIVO",
+            ultimoPagamento: new Date(),
+            proximoPagamento: nextPaymentDate,
+          });
+          console.log(`UserService ${existingUserService.id} updated for service ${serviceId}`);
+        } else {
+          // Create new UserService
+          await storage.createUserService({
+            userId: payment.userId,
+            serviceId: serviceId,
+            status: "ATIVO",
+            ultimoPagamento: new Date(),
+            proximoPagamento: nextPaymentDate,
+          });
+          console.log(`UserService created for user ${payment.userId} and service ${serviceId}`);
+        }
         
         console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]} - day 5 of next month)`);
         

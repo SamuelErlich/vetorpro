@@ -76,18 +76,27 @@ async function sendPaymentPreReminderEmails() {
   console.log('🔔 [CRON] Running payment pre-reminder check (Day 3 - due in 2 days)...');
   
   try {
-    const users = await storage.getAllUsers();
-    const activeUsers = users.filter(user => user.status === 'ATIVO');
+    // Get all active UserServices for vectorizer-001
+    const userServices = await storage.getUserServicesByServiceId('vectorizer-001');
+    const activeUserServices = userServices.filter(us => us.status === 'ATIVO');
     
-    console.log(`   Found ${activeUsers.length} active users to check`);
+    console.log(`   Found ${activeUserServices.length} active user services to check`);
     
     let sentCount = 0;
     let failedCount = 0;
     let skippedCount = 0;
 
-    for (const user of activeUsers) {
-      // Check if user's payment is due day 5 of THIS month
-      if (isPaymentDueThisMonth(user.nextPaymentDate)) {
+    for (const userService of activeUserServices) {
+      // Check if user service payment is due day 5 of THIS month
+      if (isPaymentDueThisMonth(userService.proximoPagamento)) {
+        // Get user to send email
+        const user = await storage.getUser(userService.userId);
+        if (!user) {
+          console.warn(`   User ${userService.userId} not found for UserService ${userService.id}`);
+          skippedCount++;
+          continue;
+        }
+
         const template = emailTemplates.paymentDueInTwoDays(user.email.split('@')[0]);
         const success = await sendEmail({
           to: user.email,
@@ -120,18 +129,27 @@ async function sendPaymentFinalWarningEmails() {
   console.log('🔔 [CRON] Running payment final warning check (Day 4 - due tomorrow)...');
   
   try {
-    const users = await storage.getAllUsers();
-    const activeUsers = users.filter(user => user.status === 'ATIVO');
+    // Get all active UserServices for vectorizer-001
+    const userServices = await storage.getUserServicesByServiceId('vectorizer-001');
+    const activeUserServices = userServices.filter(us => us.status === 'ATIVO');
     
-    console.log(`   Found ${activeUsers.length} active users to check`);
+    console.log(`   Found ${activeUserServices.length} active user services to check`);
     
     let sentCount = 0;
     let failedCount = 0;
     let skippedCount = 0;
 
-    for (const user of activeUsers) {
-      // Check if user's payment is due day 5 of THIS month
-      if (isPaymentDueThisMonth(user.nextPaymentDate)) {
+    for (const userService of activeUserServices) {
+      // Check if user service payment is due day 5 of THIS month
+      if (isPaymentDueThisMonth(userService.proximoPagamento)) {
+        // Get user to send email
+        const user = await storage.getUser(userService.userId);
+        if (!user) {
+          console.warn(`   User ${userService.userId} not found for UserService ${userService.id}`);
+          skippedCount++;
+          continue;
+        }
+
         const template = emailTemplates.paymentDueTomorrow(user.email.split('@')[0]);
         const success = await sendEmail({
           to: user.email,
@@ -158,33 +176,47 @@ async function sendPaymentFinalWarningEmails() {
 
 /**
  * DAY 6 at 9:00 AM - Block users and send "Access blocked" email
- * Blocks users whose payment is overdue (nextPaymentDate < today)
+ * Blocks users whose payment is overdue (proximoPagamento < today)
  */
 async function blockOverdueUsers() {
   console.log('🔔 [CRON] Running overdue payment check...');
   
   try {
-    const users = await storage.getAllUsers();
-    const activeUsers = users.filter(user => user.status === 'ATIVO');
+    // Get all active UserServices for vectorizer-001
+    const userServices = await storage.getUserServicesByServiceId('vectorizer-001');
+    const activeUserServices = userServices.filter(us => us.status === 'ATIVO');
     
-    console.log(`   Found ${activeUsers.length} active users to check`);
+    console.log(`   Found ${activeUserServices.length} active user services to check`);
     
     let blockedCount = 0;
     let emailsSent = 0;
     let failedCount = 0;
     let skippedCount = 0;
 
-    for (const user of activeUsers) {
-      // Check if user's individual nextPaymentDate is in the past (overdue)
-      if (isPaymentOverdue(user.nextPaymentDate)) {
-        // Update user status to PENDENTE (blocked) and clear nextPaymentDate
-        // Clearing prevents repeated blocking emails on subsequent runs
-        const updated = await storage.updateUser(user.id, {
+    for (const userService of activeUserServices) {
+      // Check if user service's proximoPagamento is in the past (overdue)
+      if (isPaymentOverdue(userService.proximoPagamento)) {
+        // Get user for email and compatibility update
+        const user = await storage.getUser(userService.userId);
+        if (!user) {
+          console.warn(`   User ${userService.userId} not found for UserService ${userService.id}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Update UserService status to PENDENTE (blocked) and clear proximoPagamento
+        const updatedUserService = await storage.updateUserService(userService.id, {
+          status: 'PENDENTE',
+          proximoPagamento: null, // Clear to prevent re-processing
+        });
+
+        // Also update User status for compatibility
+        const updatedUser = await storage.updateUser(userService.userId, {
           status: 'PENDENTE',
           nextPaymentDate: null, // Clear to prevent re-processing
         });
 
-        if (updated) {
+        if (updatedUserService && updatedUser) {
           blockedCount++;
           
           // Send access blocked email
@@ -201,8 +233,8 @@ async function blockOverdueUsers() {
             failedCount++;
           }
 
-          const dueDateStr = toDate(user.nextPaymentDate)?.toISOString().split('T')[0] || 'unknown';
-          console.log(`   🚫 Blocked user: ${user.email} (status → PENDENTE, payment was due: ${dueDateStr})`);
+          const dueDateStr = toDate(userService.proximoPagamento)?.toISOString().split('T')[0] || 'unknown';
+          console.log(`   🚫 Blocked user: ${user.email} (UserService & User status → PENDENTE, payment was due: ${dueDateStr})`);
         }
       } else {
         skippedCount++;
