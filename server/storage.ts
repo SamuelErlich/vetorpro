@@ -415,7 +415,14 @@ export class MemStorage implements IStorage {
 
   async getCredentialsByUserAndServices(userId: string, serviceIds: string[]): Promise<Credential[]> {
     return Array.from(this.credentials.values()).filter(
-      (cred) => cred.userId === userId && serviceIds.includes(cred.serviceId || 'vectorizer-001')
+      (cred) => {
+        // Include credentials that are either:
+        // 1. Specific to this user AND for an active service
+        // 2. Shared (userId is null) AND for an active service
+        const isUserSpecific = cred.userId === userId && serviceIds.includes(cred.serviceId || 'vectorizer-001');
+        const isSharedForActiveService = cred.userId === null && serviceIds.includes(cred.serviceId || 'vectorizer-001');
+        return isUserSpecific || isSharedForActiveService;
+      }
     );
   }
 
@@ -1003,12 +1010,19 @@ class PostgresStorage implements IStorage {
   }
 
   async getCredentialsByUserAndServices(userId: string, serviceIds: string[]): Promise<Credential[]> {
-    // Get credentials for this user that belong to any of the specified services
-    // For backward compatibility, treat null serviceId as vectorizer-001
+    // Get credentials that are either:
+    // 1. Specific to this user AND for an active service
+    // 2. Shared (userId is null) AND for an active service
     const conditions = serviceIds.map(serviceId => 
       or(
+        // User-specific credentials for this service
         and(eq(credentials.userId, userId), eq(credentials.serviceId, serviceId)),
-        and(eq(credentials.userId, userId), isNull(credentials.serviceId), eq(sql`${serviceId}`, 'vectorizer-001'))
+        // User-specific credentials with null serviceId (backward compat for vectorizer)
+        and(eq(credentials.userId, userId), isNull(credentials.serviceId), eq(sql`${serviceId}`, 'vectorizer-001')),
+        // Shared credentials (userId null) for this service
+        and(isNull(credentials.userId), eq(credentials.serviceId, serviceId)),
+        // Shared credentials with null serviceId (backward compat for vectorizer)
+        and(isNull(credentials.userId), isNull(credentials.serviceId), eq(sql`${serviceId}`, 'vectorizer-001'))
       )
     );
     
