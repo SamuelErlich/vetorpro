@@ -1164,74 +1164,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/webhook/pushinpay", async (req, res) => {
     try {
       // SECURITY: Verify webhook authenticity using constant-time comparison
-      // CRITICAL: PushinPay sends X-Token header (not x-webhook-secret!)
-      const webhookSecret = process.env.PUSHINPAY_WEBHOOK_SECRET;
+      // CRITICAL: PushinPay may send headers in multiple formats - accept ALL valid formats
+      const secret = process.env.PUSHINPAY_WEBHOOK_SECRET?.trim();
       
-      if (!webhookSecret) {
+      if (!secret) {
         console.error("❌ WEBHOOK REJECTED: PUSHINPAY_WEBHOOK_SECRET not configured in Replit Secrets");
         console.error("📝 Configure the secret: Tools → Secrets → Add PUSHINPAY_WEBHOOK_SECRET");
         return res.status(401).json({ error: "Unauthorized - webhook secret not configured" });
       }
       
-      // CRITICAL: PushinPay uses X-Token header or Authorization Bearer
-      const receivedToken = req.headers['x-token'] as string | undefined;
-      const receivedAuth = req.headers['authorization'] as string | undefined;
+      // CRITICAL: PushinPay inconsistently sends headers - check ALL possible formats
+      // Formats: x-token, X-Token, authorization, Authorization (with/without Bearer)
+      const xTokenLower = req.headers['x-token'] as string | undefined;
+      const xTokenUpper = req.headers['X-Token'] as string | undefined;
+      const authLower = req.headers['authorization'] as string | undefined;
+      const authUpper = req.headers['Authorization'] as string | undefined;
       
-      // DEBUG: Log headers for troubleshooting (in development only)
-      if (process.env.NODE_ENV !== "production") {
-        console.log("🔍 [WEBHOOK DEBUG] Headers received:");
-        console.log("  X-Token:", receivedToken ? `${receivedToken.substring(0, 10)}...` : "NOT PROVIDED");
-        console.log("  Authorization:", receivedAuth ? `${receivedAuth.substring(0, 20)}...` : "NOT PROVIDED");
+      // Collect all possible token values (any header that was sent)
+      const receivedToken = xTokenLower || xTokenUpper || authLower || authUpper;
+      
+      // DEBUG: Log received token in development only
+      if (process.env.NODE_ENV !== "production" && receivedToken) {
+        console.log("[WEBHOOK TOKEN RECEIVED]:", receivedToken.substring(0, 15) + "...");
       }
       
-      if (!receivedToken && !receivedAuth) {
-        console.error("❌ WEBHOOK REJECTED: No authentication header (X-Token or Authorization)");
+      if (!receivedToken) {
+        console.error("❌ WEBHOOK REJECTED: No authentication header found");
+        console.error("  Checked: x-token, X-Token, authorization, Authorization");
         return res.status(401).json({ error: "Unauthorized - missing authentication header" });
       }
       
-      // Normalize received secret (trim whitespace)
-      const normalizedReceived = (receivedToken || receivedAuth || '').trim();
+      // Normalize received token: trim spaces, newlines, tabs
+      const normalizedReceived = receivedToken.replace(/[\s\n\r\t]+/g, ' ').trim();
       
-      // Prepare expected values
-      const expectedDirect = webhookSecret.trim();
-      const expectedBearer = `Bearer ${webhookSecret.trim()}`;
+      // Prepare expected values: direct secret and "Bearer SECRET"
+      const expectedDirect = secret;
+      const expectedBearer = `Bearer ${secret}`;
       
-      // Use constant-time comparison to prevent timing attacks
+      // Helper function for constant-time comparison
+      const isTokenValid = (received: string, expected: string): boolean => {
+        if (received.length !== expected.length) return false;
+        try {
+          const receivedBuf = Buffer.from(received, 'utf8');
+          const expectedBuf = Buffer.from(expected, 'utf8');
+          return crypto.timingSafeEqual(receivedBuf, expectedBuf);
+        } catch {
+          return false;
+        }
+      };
+      
+      // Try all valid authentication formats
       let isValid = false;
       let matchType = "";
       
-      try {
-        // Compare with direct secret (X-Token)
-        if (normalizedReceived.length === expectedDirect.length) {
-          const receivedBuf = Buffer.from(normalizedReceived, 'utf8');
-          const expectedBuf = Buffer.from(expectedDirect, 'utf8');
-          if (crypto.timingSafeEqual(receivedBuf, expectedBuf)) {
-            isValid = true;
-            matchType = "X-Token (direct)";
-          }
+      // Format 1: Direct secret (x-token: SECRET or X-Token: SECRET)
+      if (isTokenValid(normalizedReceived, expectedDirect)) {
+        isValid = true;
+        matchType = "X-Token (direct)";
+      }
+      
+      // Format 2: Bearer format (Authorization: Bearer SECRET)
+      if (!isValid && isTokenValid(normalizedReceived, expectedBearer)) {
+        isValid = true;
+        matchType = "Authorization Bearer";
+      }
+      
+      // Format 3: Authorization without Bearer prefix (Authorization: SECRET)
+      // Some systems strip "Bearer " prefix - accept this too
+      if (!isValid && normalizedReceived.startsWith("Bearer ")) {
+        const tokenWithoutBearer = normalizedReceived.substring(7).trim();
+        if (isTokenValid(tokenWithoutBearer, expectedDirect)) {
+          isValid = true;
+          matchType = "Authorization (Bearer stripped)";
         }
-        
-        // Compare with Bearer format (Authorization)
-        if (!isValid && normalizedReceived.length === expectedBearer.length) {
-          const receivedBuf = Buffer.from(normalizedReceived, 'utf8');
-          const expectedBuf = Buffer.from(expectedBearer, 'utf8');
-          if (crypto.timingSafeEqual(receivedBuf, expectedBuf)) {
-            isValid = true;
-            matchType = "Authorization Bearer";
-          }
-        }
-      } catch (error) {
-        // timingSafeEqual throws if buffer lengths don't match
-        isValid = false;
       }
       
       if (!isValid) {
-        console.error("❌ WEBHOOK REJECTED: Token mismatch");
-        console.error(`  Received length: ${normalizedReceived.length}`);
-        console.error(`  Expected direct length: ${expectedDirect.length}`);
-        console.error(`  Expected bearer length: ${expectedBearer.length}`);
-        console.error("⚠️  Check that PUSHINPAY_WEBHOOK_SECRET matches the value configured in PushinPay dashboard");
-        return res.status(401).json({ error: "Unauthorized - invalid token" });
+        console.error("❌ WEBHOOK REJECTED: Invalid token");
+        if (process.env.NODE_ENV !== "production") {
+          console.error(`  Received length: ${normalizedReceived.length}`);
+          console.error(`  Expected direct length: ${expectedDirect.length}`);
+          console.error(`  Expected bearer length: ${expectedBearer.length}`);
+        }
+        console.error("⚠️  Check that PUSHINPAY_WEBHOOK_SECRET matches the value in PushinPay dashboard");
+        return res.status(401).json({ error: "Unauthorized - invalid or missing token" });
       }
       
       console.log(`✅ Webhook authenticated via ${matchType}`);
