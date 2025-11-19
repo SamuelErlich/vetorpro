@@ -39,6 +39,13 @@ const paymentsRateLimiter = rateLimit({
   message: "Muitas requisições de pagamento. Por favor, aguarde um momento.",
   standardHeaders: true,
   legacyHeaders: false,
+  // Skip rate limiting in test/development environments
+  skip: (req) => process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test',
+  // Properly handle trust proxy setting for Replit
+  keyGenerator: (req) => {
+    // Use X-Forwarded-For header when behind proxy (Replit)
+    return req.ip || req.headers['x-forwarded-for'] as string || req.socket.remoteAddress || 'unknown';
+  },
 });
 
 const webhookRateLimiter = rateLimit({
@@ -907,7 +914,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       // === VALIDATION CHECKS END ===
       
-      const { amount } = req.body;
+      const { amount, serviceId: requestServiceId, planId } = req.body;
       
       // CRITICAL: Accept both number and string (frontend may send either)
       if (amount == null || amount === '') {
@@ -1149,9 +1156,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       let payment;
       try {
+        // Use serviceId from request or fallback to default
+        const serviceId = requestServiceId || DEFAULT_SERVICE_ID;
+        
         const paymentData = {
           userId: req.session.userId!,
-          serviceId: DEFAULT_SERVICE_ID, // Default service for all payments
+          serviceId, // Use the service from request or default
           amount: amountInCents.toString(), // Store cents as string (decimal column)
           status: "pending" as const,
           txid: pixTxid, // Use REAL PIX ID as primary txid

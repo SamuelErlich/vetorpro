@@ -9,6 +9,7 @@ import AdminLogin from "@/pages/AdminLogin";
 import AdminServiceDetails from "@/pages/AdminServiceDetails";
 import ClientDashboard from "@/pages/ClientDashboard";
 import ClientLogin from "@/pages/ClientLogin";
+import RemoveBgPlans from "@/pages/RemoveBgPlans";
 import CriarSenha from "@/pages/CriarSenha";
 import NotFound from "@/pages/not-found";
 import PaymentPage from "@/pages/PaymentPage";
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/services/:serviceId" component={AdminServiceDetails} />
       <Route path="/payment" component={PaymentPage} />
+      <Route path="/removebg/plans" component={RemoveBgPlans} />
       <Route path="/criar-senha" component={CriarSenha} />
       <Route component={NotFound} />
     </Switch>

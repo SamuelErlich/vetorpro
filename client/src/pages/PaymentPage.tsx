@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -17,15 +17,26 @@ type PaymentStatusResponse = {
 
 export default function PaymentPage() {
   const [, setLocation] = useLocation();
+  const searchParams = useSearch();
   const { toast } = useToast();
   const [pixData, setPixData] = useState<any>(null);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
+  
+  // Get service and amount from URL parameters
+  const params = new URLSearchParams(searchParams);
+  const serviceId = params.get('service') || 'vectorizer-001';
+  const planId = params.get('plan');
+  const amount = parseFloat(params.get('amount') || '17.50');
 
   const generatePixMutation = useMutation({
     mutationFn: () =>
       apiRequest('/api/payments/pix', {
         method: 'POST',
-        body: JSON.stringify({ amount: 17.50 }),
+        body: JSON.stringify({ 
+          amount, 
+          serviceId,
+          planId 
+        }),
         headers: { 'Content-Type': 'application/json' },
       }),
     onSuccess: (data) => {

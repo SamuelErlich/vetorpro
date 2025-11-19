@@ -59,8 +59,8 @@ export default function ClientDashboard() {
   };
 
   const handleRemoveBgSubscribe = () => {
-    // Navigate to payment page with RemoveBG service
-    setLocation('/payment?service=removebg-001');
+    // Navigate to RemoveBG plans selection page
+    setLocation('/removebg/plans');
   };
 
   if (userLoading) {
