@@ -1,0 +1,83 @@
+Quero que você atualize a lógica de pagamentos do sistema conforme as regras abaixo. Não mude nada visual no front-end. Apenas ajuste o backend, rotas, consultas e regras que determinam como os pagamentos pendentes funcionam e como são exibidos.
+
+Objetivo: corrigir o problema atual onde vários pagamentos pendentes aparecem no histórico mesmo depois de pagos, além de impedir múltiplos pagamentos pendentes acumulados por usuário e serviço.
+
+Regras obrigatórias:
+
+Apenas um pagamento pendente pode existir por usuário e por serviceId.
+
+Um pagamento pendente é criado somente quando o usuário inicia um pagamento e não finaliza. Isso é o estado correto.
+
+Assim que chegar o webhook da PushinPay com status paid, todos os pagamentos pendentes anteriores relacionados ao mesmo userId e serviceId devem ser marcados como canceled automaticamente, exceto o pagamento que realmente corresponde ao TXID pago.
+
+Depois que o pagamento for confirmado, o pagamento que foi pago deve ser marcado como paid e os pagamentos pendentes antigos devem ser ocultados do histórico do usuário. O histórico deve mostrar apenas pagamentos realmente pagos e apenas o pagamento pendente mais recente.
+
+O histórico deve respeitar esta regra:
+
+Mostrar pagamentos pagos sempre.
+
+Mostrar apenas o último pagamento pendente.
+
+Nunca mostrar pendentes antigos.
+
+Se o pagamento pendente foi pago, ele se torna paid e desaparece da lista de pendentes.
+
+Bloqueio de múltiplos pendentes:
+
+Se o usuário tentar gerar outro pagamento enquanto ainda existe um pagamento pendente, deve sempre reutilizar o mesmo pagamento pendente existente.
+
+Somente gerar um novo pagamento pendente depois que o anterior tiver sido cancelado ou pago.
+
+Regra sobre pagamento pendente valido:
+
+O usuário só pode pagar o pagamento pendente mais recente.
+
+Caso ele tente pagar qualquer outro, deve ser ignorado pelo webhook.
+
+Atualização de assinatura:
+
+Quando o pagamento correto for confirmado, atualizar UserServices normalmente (status ATIVO, último pagamento, próximo pagamento).
+
+Integração com a tabela antiga:
+
+O comportamento atual do sistema não pode ser alterado.
+
+Apenas expandir a lógica para múltiplos serviços usando serviceId.
+
+Continue retornando a estrutura de dados como hoje para não quebrar o front-end.
+
+Estrutura das consultas:
+
+use userId e serviceId como chave na verificação de pendentes.
+
+ao receber webhook, encontre o pagamento pelo TXID e normalize também pelo campo transaction_id recebido na PushinPay.
+
+Cancelamento automático:
+
+sempre que um pagamento for confirmado como pago, executar a função que cancela todos os outros pagamentos pendentes daquele userId e serviceId.
+
+Histórico do usuário:
+
+retornar somente:
+pagamentos pagos
+ultimo pendente (se existir)
+
+remover pagamentos pendentes antigos.
+
+Logs:
+
+manter logs para depuração Lógicos, mas apenas no backend.
+
+Ao finalizar, atualize as seguintes partes do código:
+
+criação de pagamento para evitar múltiplos pendentes
+
+webhook para cancelar pendentes antigos
+
+consulta do histórico para filtrar corretamente
+
+função que ativa assinatura após pagamento
+
+integração com serviceId nas rotas envolvidas
+
+Você pode decidir a melhor forma de implementação, manter o sistema atual compatível e garantir que nada seja quebrado no front-end.
