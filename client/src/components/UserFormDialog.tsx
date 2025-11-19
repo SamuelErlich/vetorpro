@@ -99,6 +99,7 @@ export default function UserFormDialog({ open, onClose, onSubmit, user }: UserFo
               <SelectContent>
                 <SelectItem value="ATIVO">Ativo</SelectItem>
                 <SelectItem value="INATIVO">Inativo</SelectItem>
+                <SelectItem value="BLOQUEADO">Bloqueado</SelectItem>
               </SelectContent>
             </Select>
           </div>

@@ -124,7 +124,7 @@ export default function AdminPaymentTable({ payments, onDelete }: AdminPaymentTa
                   </TableCell>
                   {onDelete && (
                     <TableCell className="text-right">
-                      {payment.status === "pending" && (
+                      {(payment.status === "pending" || payment.status === "failed") && (
                         <Button
                           size="icon"
                           variant="outline"
