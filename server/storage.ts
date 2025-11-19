@@ -98,6 +98,11 @@ export interface IStorage {
   getRemoveBgUsageByUserId(userId: string): Promise<RemoveBgUsage[]>;
   getAllRemoveBgUsage(): Promise<RemoveBgUsage[]>;
   createRemoveBgUsage(usage: InsertRemoveBgUsage): Promise<RemoveBgUsage>;
+  deleteRemoveBgUsage(id: string): Promise<boolean>;
+  deleteRemoveBgUsageByIds(ids: string[]): Promise<number>;
+  getRemoveBgUsageOlderThan(days: number): Promise<RemoveBgUsage[]>;
+  countUserRemoveBgUsage(userId: string): Promise<number>;
+  deleteOldestUserRemoveBgUsage(userId: string, keepCount: number): Promise<number>;
   getRemoveBgPlans(): Promise<RemoveBgPlan[]>;
   getRemoveBgPlan(id: string): Promise<RemoveBgPlan | undefined>;
   createRemoveBgPlan(plan: InsertRemoveBgPlan): Promise<RemoveBgPlan>;
@@ -584,6 +589,56 @@ export class MemStorage implements IStorage {
     };
     this.removeBgUsage.set(id, usage);
     return usage;
+  }
+
+  async deleteRemoveBgUsage(id: string): Promise<boolean> {
+    return this.removeBgUsage.delete(id);
+  }
+
+  async deleteRemoveBgUsageByIds(ids: string[]): Promise<number> {
+    let deletedCount = 0;
+    for (const id of ids) {
+      if (this.removeBgUsage.delete(id)) {
+        deletedCount++;
+      }
+    }
+    return deletedCount;
+  }
+
+  async getRemoveBgUsageOlderThan(days: number): Promise<RemoveBgUsage[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return Array.from(this.removeBgUsage.values()).filter(
+      (usage) => usage.createdAt < cutoffDate
+    );
+  }
+
+  async countUserRemoveBgUsage(userId: string): Promise<number> {
+    return Array.from(this.removeBgUsage.values()).filter(
+      (usage) => usage.userId === userId
+    ).length;
+  }
+
+  async deleteOldestUserRemoveBgUsage(userId: string, keepCount: number): Promise<number> {
+    const userUsage = Array.from(this.removeBgUsage.values())
+      .filter((usage) => usage.userId === userId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    if (userUsage.length <= keepCount) {
+      return 0;
+    }
+    
+    const toDelete = userUsage.slice(keepCount);
+    let deletedCount = 0;
+    
+    for (const usage of toDelete) {
+      if (this.removeBgUsage.delete(usage.id)) {
+        deletedCount++;
+      }
+    }
+    
+    return deletedCount;
   }
 
   async getRemoveBgPlans(): Promise<RemoveBgPlan[]> {
@@ -1089,6 +1144,63 @@ class PostgresStorage implements IStorage {
   async createRemoveBgUsage(insertUsage: InsertRemoveBgUsage): Promise<RemoveBgUsage> {
     const result = await this.db.insert(removeBgUsage).values(insertUsage).returning();
     return result[0];
+  }
+
+  async deleteRemoveBgUsage(id: string): Promise<boolean> {
+    const result = await this.db.delete(removeBgUsage)
+      .where(eq(removeBgUsage.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async deleteRemoveBgUsageByIds(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0;
+    
+    const result = await this.db.delete(removeBgUsage)
+      .where(sql`${removeBgUsage.id} IN (${sql.join(ids.map(id => sql`${id}`), sql`, `)})`)
+      .returning();
+    return result.length;
+  }
+
+  async getRemoveBgUsageOlderThan(days: number): Promise<RemoveBgUsage[]> {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+    
+    return await this.db.select()
+      .from(removeBgUsage)
+      .where(sql`${removeBgUsage.createdAt} < ${cutoffDate}`);
+  }
+
+  async countUserRemoveBgUsage(userId: string): Promise<number> {
+    const result = await this.db.select({ count: sql<number>`count(*)::int` })
+      .from(removeBgUsage)
+      .where(eq(removeBgUsage.userId, userId));
+    return result[0]?.count || 0;
+  }
+
+  async deleteOldestUserRemoveBgUsage(userId: string, keepCount: number): Promise<number> {
+    // Get user's usage records sorted by date (newest first)
+    const userUsage = await this.db.select()
+      .from(removeBgUsage)
+      .where(eq(removeBgUsage.userId, userId))
+      .orderBy(desc(removeBgUsage.createdAt));
+    
+    if (userUsage.length <= keepCount) {
+      return 0;
+    }
+    
+    // Get IDs of records to delete (all except the newest keepCount)
+    const idsToDelete = userUsage.slice(keepCount).map(u => u.id);
+    
+    if (idsToDelete.length === 0) {
+      return 0;
+    }
+    
+    const result = await this.db.delete(removeBgUsage)
+      .where(sql`${removeBgUsage.id} IN (${sql.join(idsToDelete.map(id => sql`${id}`), sql`, `)})`)
+      .returning();
+    
+    return result.length;
   }
 
   async getRemoveBgPlans(): Promise<RemoveBgPlan[]> {
