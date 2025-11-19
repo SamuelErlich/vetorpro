@@ -22,11 +22,11 @@ import { credentials } from "@shared/schema";
 import { z } from "zod";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-const insertCredentialSchema = createInsertSchema(credentials).omit({
-  id: true,
-}).extend({
-  data: z.string().min(1, "Dados são obrigatórios"),
+// Schema for form validation (without data field, since we build it from username/password)
+const credentialFormSchema = z.object({
   month: z.string().min(1, "Mês é obrigatório"),
+  username: z.string().optional(),
+  password: z.string().optional(),
 });
 
 interface ServiceWithSubscribers extends Service {
@@ -55,6 +55,8 @@ export default function ServiceDetails() {
   const [editingService, setEditingService] = useState(false);
   const [editedService, setEditedService] = useState<Partial<Service>>({});
   const [editingUserPlans, setEditingUserPlans] = useState<Record<string, { planId: string | null; credits: number }>>({});
+  const [editingCredential, setEditingCredential] = useState<Credential | null>(null);
+  const [editCredentialData, setEditCredentialData] = useState({ month: "", username: "", password: "" });
 
   // Fetch service details
   const { data: service, isLoading: serviceLoading } = useQuery<ServiceWithSubscribers>({
@@ -188,22 +190,33 @@ export default function ServiceDetails() {
   });
 
 
-  // Create credential form
-  const form = useForm<z.infer<typeof insertCredentialSchema>>({
-    resolver: zodResolver(insertCredentialSchema),
+  // Create credential form with username and password fields
+  const form = useForm<z.infer<typeof credentialFormSchema>>({
+    resolver: zodResolver(credentialFormSchema),
     defaultValues: {
-      serviceId: serviceId,
-      userId: null,
       month: new Date().toISOString().slice(0, 7),
-      data: "",
+      username: "",
+      password: "",
     },
   });
 
   const createCredentialMutation = useMutation({
-    mutationFn: async (values: z.infer<typeof insertCredentialSchema>) => {
+    mutationFn: async (values: z.infer<typeof credentialFormSchema>) => {
+      // Build JSON from username and password fields
+      const credentialData: any = {};
+      if (values.username?.trim()) credentialData.username = values.username.trim();
+      if (values.password?.trim()) credentialData.password = values.password.trim();
+      
+      const jsonData = JSON.stringify(credentialData);
+      
       return apiRequest("/api/admin/credentials", {
         method: "POST",
-        body: JSON.stringify({ ...values, serviceId }),
+        body: JSON.stringify({ 
+          serviceId: serviceId,
+          userId: null,
+          month: values.month,
+          data: jsonData 
+        }),
         headers: { "Content-Type": "application/json" },
       });
     },
@@ -245,6 +258,74 @@ export default function ServiceDetails() {
       });
     },
   });
+
+  // Update credential mutation
+  const updateCredentialMutation = useMutation({
+    mutationFn: async ({ credentialId, data }: { credentialId: string; data: any }) => {
+      // Parse existing data and preserve extra fields
+      let existingData: any = {};
+      const credential = credentials?.find(c => c.id === credentialId);
+      if (credential) {
+        try {
+          existingData = JSON.parse(credential.data);
+        } catch (e) {
+          // If parsing fails, start fresh
+        }
+      }
+
+      // Update only username and password, preserve other fields
+      const updatedData = {
+        ...existingData,
+        username: data.username?.trim() || existingData.username,
+        password: data.password?.trim() || existingData.password,
+      };
+
+      return apiRequest(`/api/admin/credentials/${credentialId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ 
+          month: data.month,
+          data: JSON.stringify(updatedData)
+        }),
+        headers: { "Content-Type": "application/json" },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/services", serviceId, "credentials"] });
+      toast({
+        title: "Credencial atualizada",
+        description: "A credencial foi atualizada com sucesso.",
+      });
+      setEditingCredential(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Erro ao atualizar",
+        description: error.message || "Não foi possível atualizar a credencial.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handler to start editing a credential
+  const handleEditCredential = (credential: Credential) => {
+    setEditingCredential(credential);
+    
+    // Parse existing data to populate form fields
+    let parsedData = { username: "", password: "" };
+    try {
+      const parsed = JSON.parse(credential.data);
+      parsedData.username = parsed.username || "";
+      parsedData.password = parsed.password || "";
+    } catch (e) {
+      // If parsing fails, leave fields empty
+    }
+    
+    setEditCredentialData({
+      month: credential.month,
+      username: parsedData.username,
+      password: parsedData.password,
+    });
+  };
 
   if (serviceLoading) {
     return (
@@ -688,15 +769,34 @@ export default function ServiceDetails() {
                           />
                           <FormField
                             control={form.control}
-                            name="data"
+                            name="username"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Dados da Credencial (JSON)</FormLabel>
+                                <FormLabel>Nome de Usuário</FormLabel>
                                 <FormControl>
-                                  <Textarea 
+                                  <Input 
                                     {...field} 
-                                    placeholder='{"username": "user", "password": "pass"}'
-                                    data-testid="input-credential-data"
+                                    type="text"
+                                    placeholder="Digite o nome de usuário"
+                                    data-testid="input-credential-username"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="password"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Senha</FormLabel>
+                                <FormControl>
+                                  <Input 
+                                    {...field} 
+                                    type="text"
+                                    placeholder="Digite a senha"
+                                    data-testid="input-credential-password"
                                   />
                                 </FormControl>
                                 <FormMessage />
@@ -710,6 +810,77 @@ export default function ServiceDetails() {
                           </DialogFooter>
                         </form>
                       </Form>
+                    </DialogContent>
+                  </Dialog>
+
+                  {/* Edit Credential Modal */}
+                  <Dialog open={!!editingCredential} onOpenChange={(open) => !open && setEditingCredential(null)}>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Editar Credencial</DialogTitle>
+                        <DialogDescription>
+                          Atualize as informações da credencial
+                        </DialogDescription>
+                      </DialogHeader>
+                      <form 
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          if (editingCredential) {
+                            updateCredentialMutation.mutate({
+                              credentialId: editingCredential.id,
+                              data: editCredentialData,
+                            });
+                          }
+                        }}
+                        className="space-y-4"
+                      >
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-month">Mês</Label>
+                          <Input
+                            id="edit-month"
+                            type="month"
+                            value={editCredentialData.month}
+                            onChange={(e) => setEditCredentialData(prev => ({ ...prev, month: e.target.value }))}
+                            required
+                            data-testid="input-edit-credential-month"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-username">Nome de Usuário</Label>
+                          <Input
+                            id="edit-username"
+                            type="text"
+                            value={editCredentialData.username}
+                            onChange={(e) => setEditCredentialData(prev => ({ ...prev, username: e.target.value }))}
+                            placeholder="Digite o nome de usuário"
+                            data-testid="input-edit-credential-username"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-password">Senha</Label>
+                          <Input
+                            id="edit-password"
+                            type="text"
+                            value={editCredentialData.password}
+                            onChange={(e) => setEditCredentialData(prev => ({ ...prev, password: e.target.value }))}
+                            placeholder="Digite a senha"
+                            data-testid="input-edit-credential-password"
+                          />
+                        </div>
+                        <DialogFooter>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setEditingCredential(null)}
+                            data-testid="button-cancel-edit"
+                          >
+                            Cancelar
+                          </Button>
+                          <Button type="submit" data-testid="button-update-credential">
+                            Atualizar
+                          </Button>
+                        </DialogFooter>
+                      </form>
                     </DialogContent>
                   </Dialog>
                 </div>
@@ -726,14 +897,24 @@ export default function ServiceDetails() {
                           <p className="font-medium">Mês: {credential.month}</p>
                           <pre className="text-sm text-muted-foreground">{credential.data}</pre>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => deleteCredentialMutation.mutate(credential.id)}
-                          data-testid={`button-delete-credential-${credential.id}`}
-                        >
-                          <Trash className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditCredential(credential)}
+                            data-testid={`button-edit-credential-${credential.id}`}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => deleteCredentialMutation.mutate(credential.id)}
+                            data-testid={`button-delete-credential-${credential.id}`}
+                          >
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     ))
                   ) : (
