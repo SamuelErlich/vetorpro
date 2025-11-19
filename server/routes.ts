@@ -684,7 +684,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/payments/user/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
-      const payments = await storage.getPaymentsByUserId(id);
+      // Use filtered payments (paid + latest pending only)
+      const payments = await storage.getFilteredPaymentsForUser(id);
       res.json(payments);
     } catch (error) {
       console.error("Get user payments error:", error);
@@ -1140,7 +1141,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's payments (with rate limiting)
   app.get("/api/payments", requireAuth, paymentsRateLimiter, async (req, res) => {
     try {
-      const payments = await storage.getPaymentsByUserId(req.session.userId!);
+      // Use filtered payments (paid + latest pending only)
+      const payments = await storage.getFilteredPaymentsForUser(req.session.userId!);
       res.json(payments);
     } catch (error) {
       console.error("Get payments error:", error);
@@ -2329,7 +2331,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Upsert UserService - idempotent operation that handles duplicates gracefully
-        const serviceId = payment.serviceId || DEFAULT_SERVICE_ID; // Use payment's serviceId or default
+        // serviceId already declared above
         const userService = await storage.upsertUserService({
           userId: payment.userId,
           serviceId: serviceId,
