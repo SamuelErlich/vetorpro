@@ -424,7 +424,7 @@ describe("Multi-Service Credential Isolation Tests", () => {
       );
       
       expect(result.success).toBe(false);
-      expect(result.error).toContain("does not have active");
+      expect(result.error).toContain("does not have service");
       
       console.log("✅ Test 3.1: Admin prevented from creating credential for non-subscribed service");
     });
