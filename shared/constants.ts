@@ -14,7 +14,7 @@ export const PAYMENT_DUE_DAY = 5;
 
 // RemoveBG Plans
 export const REMOVEBG_PLANS = [
-  { id: 'removebg-starter', name: 'Starter', credits: 50, price: 'R$ 19,00' },
-  { id: 'removebg-professional', name: 'Professional', credits: 200, price: 'R$ 49,00' },
-  { id: 'removebg-business', name: 'Business', credits: 500, price: 'R$ 99,00' },
+  { id: 'removebg-start', name: 'Start', credits: 30, price: 'R$ 14,90' },
+  { id: 'removebg-pro', name: 'Pro', credits: 120, price: 'R$ 34,90' },
+  { id: 'removebg-studio', name: 'Studio', credits: 300, price: 'R$ 69,90' },
 ] as const;
