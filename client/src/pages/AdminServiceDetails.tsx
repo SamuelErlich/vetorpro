@@ -145,31 +145,6 @@ export default function ServiceDetails() {
     },
   });
 
-  // Add subscriber mutation
-  const addSubscriberMutation = useMutation({
-    mutationFn: async ({ email, status }: { email: string; status: "ATIVO" | "INATIVO" }) => {
-      return apiRequest(`/api/admin/services/${serviceId}/subscribe`, {
-        method: "POST",
-        body: JSON.stringify({ email, status }),
-        headers: { "Content-Type": "application/json" },
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/services", serviceId] });
-      toast({
-        title: "Assinante adicionado",
-        description: "O usuário foi adicionado ao serviço com sucesso.",
-      });
-      setShowAddSubscriberModal(false);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Erro ao adicionar assinante",
-        description: error.message || "Não foi possível adicionar o usuário ao serviço.",
-        variant: "destructive",
-      });
-    },
-  });
 
   // Create credential form
   const form = useForm<z.infer<typeof insertCredentialSchema>>({
@@ -638,11 +613,9 @@ export default function ServiceDetails() {
       <AddSubscriberModal
         open={showAddSubscriberModal}
         onClose={() => setShowAddSubscriberModal(false)}
-        onConfirm={(email, status) => {
-          addSubscriberMutation.mutate({ email, status });
-        }}
+        onSuccess={() => setShowAddSubscriberModal(false)}
         serviceName={service?.nome || ""}
-        isLoading={addSubscriberMutation.isPending}
+        serviceId={serviceId || ""}
       />
     </div>
   );
