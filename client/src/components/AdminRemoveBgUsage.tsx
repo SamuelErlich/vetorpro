@@ -13,7 +13,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { ChevronLeft, ChevronRight, Download, Image } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Image, Trash2, AlertCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useMutation } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AdminRemoveBgUsageProps {
   userId?: string;
@@ -21,6 +35,11 @@ interface AdminRemoveBgUsageProps {
 
 export default function AdminRemoveBgUsage({ userId }: AdminRemoveBgUsageProps) {
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
+  const [isBatchDelete, setIsBatchDelete] = useState(false);
+  
   const limit = 20;
   const offset = (currentPage - 1) * limit;
 
@@ -33,6 +52,57 @@ export default function AdminRemoveBgUsage({ userId }: AdminRemoveBgUsageProps) 
   const usage = data?.data || [];
   const total = data?.total || 0;
   const totalPages = Math.ceil(total / limit);
+  
+  // Delete single image mutation (admin)
+  const deleteSingleMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest(`/api/admin/removebg/usage/${id}`, {
+        method: "DELETE",
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Imagem excluída",
+        description: "A imagem foi removida com sucesso.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/removebg/usage"] });
+      setDeleteAlertOpen(false);
+      setItemToDelete(null);
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao excluir",
+        description: "Não foi possível excluir a imagem. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  // Delete batch mutation (admin)
+  const deleteBatchMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return apiRequest("/api/admin/removebg/usage/batch", {
+        method: "DELETE",
+        body: JSON.stringify({ ids }),
+      });
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Imagens excluídas",
+        description: `${data.deletedCount} imagens foram removidas com sucesso.`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/removebg/usage"] });
+      setSelectedItems(new Set());
+      setDeleteAlertOpen(false);
+    },
+    onError: () => {
+      toast({
+        title: "Erro ao excluir",
+        description: "Não foi possível excluir as imagens. Tente novamente.",
+        variant: "destructive",
+      });
+    },
+  });
 
   const formatDate = (date: Date | string) => {
     const d = new Date(date);
@@ -71,6 +141,44 @@ export default function AdminRemoveBgUsage({ userId }: AdminRemoveBgUsageProps) 
     if (credits <= 1) return "text-green-600";
     if (credits <= 2) return "text-yellow-600";
     return "text-red-600";
+  };
+  
+  const toggleItemSelection = (id: string) => {
+    const newSelection = new Set(selectedItems);
+    if (newSelection.has(id)) {
+      newSelection.delete(id);
+    } else {
+      newSelection.add(id);
+    }
+    setSelectedItems(newSelection);
+  };
+  
+  const toggleSelectAll = () => {
+    if (selectedItems.size === usage.length) {
+      setSelectedItems(new Set());
+    } else {
+      setSelectedItems(new Set(usage.map((item: any) => item.id)));
+    }
+  };
+  
+  const handleDeleteSingle = (id: string) => {
+    setItemToDelete(id);
+    setIsBatchDelete(false);
+    setDeleteAlertOpen(true);
+  };
+  
+  const handleDeleteSelected = () => {
+    if (selectedItems.size === 0) return;
+    setIsBatchDelete(true);
+    setDeleteAlertOpen(true);
+  };
+  
+  const confirmDelete = () => {
+    if (isBatchDelete) {
+      deleteBatchMutation.mutate(Array.from(selectedItems));
+    } else if (itemToDelete) {
+      deleteSingleMutation.mutate(itemToDelete);
+    }
   };
 
   return (
