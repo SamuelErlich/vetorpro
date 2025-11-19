@@ -4,11 +4,45 @@ import session from "express-session";
 import crypto from "crypto";
 import bcrypt from "bcrypt";
 import { z } from "zod";
+import rateLimit from "express-rate-limit";
 import { storage } from "./storage";
 import { insertUserSchema, insertCredentialSchema, insertPaymentSchema } from "@shared/schema";
 import { manualTriggers } from "./jobs/paymentCron";
 import { sendEmail, emailTemplates } from "./utils/email";
 import { DEFAULT_SERVICE_ID } from "@shared/constants";
+
+// Rate limiters configuration
+const authRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // Limit each IP to 5 requests per windowMs
+  message: "Muitas tentativas de login. Por favor, tente novamente em 15 minutos.",
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+const adminLoginRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 3, // Limit each IP to 3 requests per windowMs (stricter for admin)
+  message: "Muitas tentativas de login administrativo. Por favor, tente novamente em 15 minutos.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const paymentsRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // Limit each IP to 10 requests per minute
+  message: "Muitas requisições de pagamento. Por favor, aguarde um momento.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const webhookRateLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // Limit each IP to 100 requests per minute
+  message: "Too many webhook requests from this IP, please try again later.",
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Extend session data
 declare module 'express-session' {
@@ -35,11 +69,22 @@ const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
 };
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // SECURITY: Validate webhook secret at startup (fail fast)
+  // SECURITY: Validate webhook secret at startup (fail fast) - MANDATORY
   const webhookSecret = process.env.PUSHINPAY_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    console.warn("⚠️  WARNING: PUSHINPAY_WEBHOOK_SECRET not configured - webhook authentication will be disabled!");
-    console.warn("⚠️  This is a security risk in production. Set PUSHINPAY_WEBHOOK_SECRET environment variable.");
+  if (!webhookSecret || webhookSecret.trim() === '') {
+    console.error("❌ CRITICAL SECURITY WARNING: PUSHINPAY_WEBHOOK_SECRET is not configured!");
+    console.error("❌ This is a critical security requirement for production.");
+    console.error("❌ Please set PUSHINPAY_WEBHOOK_SECRET environment variable with a secure random value.");
+    console.error("❌ Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"");
+    
+    // In production, fail fast. In development, allow continuing with a warning
+    if (process.env.NODE_ENV === 'production') {
+      console.error("❌ FATAL: Cannot start production server without webhook authentication!");
+      process.exit(1);
+    } else {
+      console.warn("⚠️  WARNING: Continuing in development mode without webhook authentication.");
+      console.warn("⚠️  Webhook endpoint will return 403 Forbidden for all requests!");
+    }
   }
 
   // Trust proxy for production (behind Replit's HTTPS proxy)
@@ -64,8 +109,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== AUTH ROUTES ==========
   
-  // Client login
-  app.post("/api/auth/login", async (req, res) => {
+  // Client login (with rate limiting)
+  app.post("/api/auth/login", authRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       
@@ -99,8 +144,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin login
-  app.post("/api/auth/admin/login", async (req, res) => {
+  // Admin login (with stricter rate limiting)
+  app.post("/api/auth/admin/login", adminLoginRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
       
@@ -133,8 +178,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Logout
-  app.post("/api/auth/logout", (req, res) => {
+  // Logout (with rate limiting)
+  app.post("/api/auth/logout", authRateLimiter, (req, res) => {
     req.session.destroy((err) => {
       if (err) {
         return res.status(500).json({ error: "Erro ao fazer logout" });
@@ -159,8 +204,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Validate password reset token
-  app.get("/api/auth/validate-token/:token", async (req, res) => {
+  // Validate password reset token (with rate limiting)
+  app.get("/api/auth/validate-token/:token", authRateLimiter, async (req, res) => {
     try {
       const { token } = req.params;
       
@@ -181,8 +226,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create password from token
-  app.post("/api/auth/create-password", async (req, res) => {
+  // Create password from token (with rate limiting)
+  app.post("/api/auth/create-password", authRateLimiter, async (req, res) => {
     try {
       // Validate request body with Zod
       const createPasswordSchema = z.object({
@@ -233,8 +278,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User self-registration (public endpoint)
-  app.post("/api/auth/register", async (req, res) => {
+  // User self-registration (public endpoint with rate limiting)
+  app.post("/api/auth/register", authRateLimiter, async (req, res) => {
     try {
       // Validate request body with Zod
       const registerSchema = z.object({
@@ -691,8 +736,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== PAYMENT ROUTES ==========
   
-  // Get user's payments
-  app.get("/api/payments", requireAuth, async (req, res) => {
+  // Get user's payments (with rate limiting)
+  app.get("/api/payments", requireAuth, paymentsRateLimiter, async (req, res) => {
     try {
       const payments = await storage.getPaymentsByUserId(req.session.userId!);
       res.json(payments);
@@ -702,8 +747,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Check payment status by txid
-  app.get("/api/payments/status/:txid", requireAuth, async (req, res) => {
+  // Check payment status by txid (with rate limiting)
+  app.get("/api/payments/status/:txid", requireAuth, paymentsRateLimiter, async (req, res) => {
     try {
       const { txid } = req.params;
       const payment = await storage.getPaymentByTxid(txid);
@@ -734,8 +779,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Generate PIX payment
-  app.post("/api/payments/pix", requireAuth, async (req, res) => {
+  // Generate PIX payment (with rate limiting)
+  app.post("/api/payments/pix", requireAuth, paymentsRateLimiter, async (req, res) => {
     try {
       const { amount } = req.body;
       
@@ -1240,77 +1285,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Webhook from PushinPay
-  app.post("/api/webhook/pushinpay", async (req, res) => {
+  // Webhook from PushinPay (with rate limiting and strict authentication)
+  app.post("/api/webhook/pushinpay", webhookRateLimiter, async (req, res) => {
     try {
       // Log webhook receipt for debugging
       console.log("📨 Webhook received from PushinPay");
       
-      // SECURITY: PushinPay real does NOT send x-token header consistently
-      // Strategy: Try header authentication first, fallback to payload validation
+      // SECURITY: Strict authentication required - X-Token header is MANDATORY
       const secret = process.env.PUSHINPAY_WEBHOOK_SECRET?.trim();
       
-      // Check for authentication header (optional - PushinPay may not send it)
+      // If no secret is configured, reject all webhook requests (fail safe)
+      if (!secret) {
+        console.error("❌ WEBHOOK REJECTED: PUSHINPAY_WEBHOOK_SECRET not configured");
+        return res.status(403).json({ error: "Forbidden: Webhook authentication not configured" });
+      }
+      
+      // SECURITY: Check for authentication header - REQUIRED
       const xTokenLower = req.headers['x-token'] as string | undefined;
       const xTokenUpper = req.headers['X-Token'] as string | undefined;
       const authLower = req.headers['authorization'] as string | undefined;
       const authUpper = req.headers['Authorization'] as string | undefined;
       const receivedToken = xTokenLower || xTokenUpper || authLower || authUpper;
       
-      // AUTHENTICATION STRATEGY:
-      // If header exists AND secret is configured → validate header
-      // If no header OR no secret configured → use payload validation (TXID matching)
-      let authMethod = "payload-validation";
+      // STRICT AUTHENTICATION: X-Token header is MANDATORY
+      if (!receivedToken) {
+        console.error("❌ WEBHOOK REJECTED: Missing X-Token header");
+        return res.status(403).json({ error: "Forbidden: Missing authentication header" });
+      }
       
-      if (receivedToken && secret) {
-        // Header authentication available - validate it
-        const normalizedReceived = receivedToken.replace(/[\s\n\r\t]+/g, ' ').trim();
-        const expectedDirect = secret;
-        const expectedBearer = `Bearer ${secret}`;
-        
-        // Helper function for constant-time comparison
-        const isTokenValid = (received: string, expected: string): boolean => {
-          if (received.length !== expected.length) return false;
-          try {
-            const receivedBuf = Buffer.from(received, 'utf8');
-            const expectedBuf = Buffer.from(expected, 'utf8');
-            return crypto.timingSafeEqual(receivedBuf, expectedBuf);
-          } catch {
-            return false;
-          }
-        };
-        
-        // Try all valid authentication formats
-        let isValid = false;
-        
-        if (isTokenValid(normalizedReceived, expectedDirect)) {
-          isValid = true;
-          authMethod = "x-token";
-        } else if (isTokenValid(normalizedReceived, expectedBearer)) {
-          isValid = true;
-          authMethod = "authorization-bearer";
-        } else if (normalizedReceived.startsWith("Bearer ")) {
-          const tokenWithoutBearer = normalizedReceived.substring(7).trim();
-          if (isTokenValid(tokenWithoutBearer, expectedDirect)) {
-            isValid = true;
-            authMethod = "authorization-stripped";
-          }
+      // Validate the provided token
+      const normalizedReceived = receivedToken.replace(/[\s\n\r\t]+/g, ' ').trim();
+      const expectedDirect = secret;
+      const expectedBearer = `Bearer ${secret}`;
+      
+      // Helper function for constant-time comparison
+      const isTokenValid = (received: string, expected: string): boolean => {
+        if (received.length !== expected.length) return false;
+        try {
+          const receivedBuf = Buffer.from(received, 'utf8');
+          const expectedBuf = Buffer.from(expected, 'utf8');
+          return crypto.timingSafeEqual(receivedBuf, expectedBuf);
+        } catch {
+          return false;
         }
-        
-        if (!isValid) {
-          console.error("❌ WEBHOOK REJECTED: Invalid x-token header provided");
-          console.error("⚠️  Header was sent but doesn't match PUSHINPAY_WEBHOOK_SECRET");
-          // Don't return 401 - fall back to payload validation
-          authMethod = "payload-validation";
-        } else {
-          console.log(`✅ Webhook authenticated via header (${authMethod})`);
+      };
+      
+      // Try all valid authentication formats
+      let isValid = false;
+      let authMethod = "";
+      
+      if (isTokenValid(normalizedReceived, expectedDirect)) {
+        isValid = true;
+        authMethod = "x-token";
+      } else if (isTokenValid(normalizedReceived, expectedBearer)) {
+        isValid = true;
+        authMethod = "authorization-bearer";
+      } else if (normalizedReceived.startsWith("Bearer ")) {
+        const tokenWithoutBearer = normalizedReceived.substring(7).trim();
+        if (isTokenValid(tokenWithoutBearer, expectedDirect)) {
+          isValid = true;
+          authMethod = "authorization-stripped";
         }
       }
       
-      // If no header auth succeeded, we'll use payload validation (TXID matching)
-      if (authMethod === "payload-validation") {
-        console.log("ℹ️  No valid header auth - using payload validation (TXID matching)");
+      // STRICT: If authentication fails, reject the request immediately
+      if (!isValid) {
+        console.error("❌ WEBHOOK REJECTED: Invalid X-Token header");
+        console.error("⚠️  Header was sent but doesn't match PUSHINPAY_WEBHOOK_SECRET");
+        return res.status(403).json({ error: "Forbidden: Invalid authentication token" });
       }
+      
+      console.log(`✅ Webhook authenticated successfully via ${authMethod}`);
       
       // Log webhook body for debugging
       console.log("📦 Webhook received body:", JSON.stringify(req.body));

@@ -1,10 +1,54 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeData } from "./init-data";
 import { initializePaymentCron } from "./jobs/paymentCron";
 
 const app = express();
+
+// CORS Configuration
+const corsOptions: cors.CorsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    // Production domain from environment variable
+    const allowedOrigins = [
+      'http://localhost:5000',
+      'http://localhost:5173', // Vite dev server port
+      'http://127.0.0.1:5000', // localhost alias
+      'http://127.0.0.1:5173', // Vite dev server alias
+    ];
+
+    // Add production domain if configured
+    if (process.env.PRODUCTION_DOMAIN) {
+      allowedOrigins.push(process.env.PRODUCTION_DOMAIN);
+    }
+
+    // In development, allow Replit domains
+    if (process.env.NODE_ENV === 'development' || process.env.REPL_SLUG) {
+      // Allow all Replit subdomains
+      if (origin.includes('.replit.dev') || origin.includes('.repl.co')) {
+        return callback(null, true);
+      }
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️ CORS: Blocked request from origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true, // Allow cookies for session management
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Token', 'x-token'],
+};
+
+app.use(cors(corsOptions));
 
 declare module 'http' {
   interface IncomingMessage {
