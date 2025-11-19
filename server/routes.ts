@@ -1931,6 +1931,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ========== ADMIN REMOVEBG ROUTES ==========
+  
+  // GET /api/admin/removebg/usage - Get all users' RemoveBG usage
+  app.get("/api/admin/removebg/usage", requireAdmin, async (req, res) => {
+    try {
+      // Get query parameters for filtering
+      const { userId, limit = 100, offset = 0 } = req.query;
+      
+      let allUsage = await storage.getAllRemoveBgUsage();
+      
+      // Filter by user if specified
+      if (userId && typeof userId === 'string') {
+        allUsage = allUsage.filter(u => u.userId === userId);
+      }
+      
+      // Sort by creation date (newest first)
+      allUsage.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      // Apply pagination
+      const limitNum = parseInt(limit as string);
+      const offsetNum = parseInt(offset as string);
+      const paginatedUsage = allUsage.slice(offsetNum, offsetNum + limitNum);
+      
+      // Add user emails to the response
+      const usageWithUsers = await Promise.all(
+        paginatedUsage.map(async (usage) => {
+          const user = await storage.getUser(usage.userId);
+          return {
+            ...usage,
+            userEmail: user?.email || 'Unknown'
+          };
+        })
+      );
+      
+      res.json({
+        data: usageWithUsers,
+        total: allUsage.length,
+        limit: limitNum,
+        offset: offsetNum
+      });
+    } catch (error) {
+      console.error("Error fetching RemoveBG usage:", error);
+      res.status(500).json({ error: "Failed to fetch RemoveBG usage" });
+    }
+  });
+
+  // GET /api/admin/removebg/subscriptions - Get all RemoveBG subscriptions
+  app.get("/api/admin/removebg/subscriptions", requireAdmin, async (req, res) => {
+    try {
+      const REMOVEBG_SERVICE_ID = "removebg-001";
+      
+      // Get all user services for RemoveBG
+      const userServices = await storage.getUserServicesByServiceId(REMOVEBG_SERVICE_ID);
+      
+      // Enrich with user data and usage statistics
+      const subscriptionsData = await Promise.all(
+        userServices.map(async (userService) => {
+          const user = await storage.getUser(userService.userId);
+          const usage = await storage.getRemoveBgUsageByUserId(userService.userId);
+          
+          // Calculate credits used this month
+          const now = new Date();
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          const monthlyUsage = usage.filter(u => 
+            new Date(u.createdAt) >= startOfMonth
+          );
+          const creditsUsedThisMonth = monthlyUsage.reduce((sum, u) => sum + u.creditsUsed, 0);
+          
+          return {
+            id: userService.id,
+            userId: userService.userId,
+            userEmail: user?.email || 'Unknown',
+            status: userService.status,
+            creditsAvailable: userService.creditsAvailable || 0,
+            creditsUsedThisMonth,
+            totalCreditsUsed: usage.reduce((sum, u) => sum + u.creditsUsed, 0),
+            lastPayment: userService.ultimoPagamento,
+            nextPayment: userService.proximoPagamento,
+            createdAt: userService.createdAt,
+          };
+        })
+      );
+      
+      res.json({ data: subscriptionsData });
+    } catch (error) {
+      console.error("Error fetching RemoveBG subscriptions:", error);
+      res.status(500).json({ error: "Failed to fetch RemoveBG subscriptions" });
+    }
+  });
+
+  // PATCH /api/admin/removebg/credits/:userId - Adjust user credits manually
+  app.patch("/api/admin/removebg/credits/:userId", requireAdmin, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { credits, reason } = req.body;
+      
+      if (typeof credits !== 'number' || credits < 0) {
+        return res.status(400).json({ error: "Invalid credits value" });
+      }
+      
+      const REMOVEBG_SERVICE_ID = "removebg-001";
+      
+      // Update the user's credits
+      const updated = await storage.updateUserCredits(userId, REMOVEBG_SERVICE_ID, credits);
+      
+      if (!updated) {
+        return res.status(404).json({ error: "User service not found" });
+      }
+      
+      // Log the adjustment (could be stored in a separate audit table in the future)
+      console.log(`Admin adjusted credits for user ${userId}: ${credits} credits. Reason: ${reason || 'No reason provided'}`);
+      
+      res.json({ 
+        success: true, 
+        userId, 
+        newCredits: credits,
+        reason 
+      });
+    } catch (error) {
+      console.error("Error adjusting user credits:", error);
+      res.status(500).json({ error: "Failed to adjust credits" });
+    }
+  });
+
+  // GET /api/admin/removebg/stats - Get usage statistics
+  app.get("/api/admin/removebg/stats", requireAdmin, async (req, res) => {
+    try {
+      const allUsage = await storage.getAllRemoveBgUsage();
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      
+      // Filter usage for this month
+      const monthlyUsage = allUsage.filter(u => 
+        new Date(u.createdAt) >= startOfMonth
+      );
+      
+      // Calculate statistics
+      const totalCreditsConsumed = monthlyUsage.reduce((sum, u) => sum + u.creditsUsed, 0);
+      const totalImagesProcessed = monthlyUsage.length;
+      
+      // Get user statistics
+      const userStats = new Map<string, number>();
+      monthlyUsage.forEach(u => {
+        userStats.set(u.userId, (userStats.get(u.userId) || 0) + u.creditsUsed);
+      });
+      
+      // Get top users
+      const topUsersArray = Array.from(userStats.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5);
+      
+      // Fetch user emails for top users
+      const topUsers = await Promise.all(
+        topUsersArray.map(async ([userId, credits]) => {
+          const user = await storage.getUser(userId);
+          return {
+            userId,
+            email: user?.email || 'Unknown',
+            creditsUsed: credits
+          };
+        })
+      );
+      
+      const averageCreditsPerUser = userStats.size > 0 
+        ? Math.round(totalCreditsConsumed / userStats.size)
+        : 0;
+      
+      // Get daily usage for chart
+      const dailyUsage = new Map<string, number>();
+      monthlyUsage.forEach(u => {
+        const date = new Date(u.createdAt).toISOString().split('T')[0];
+        dailyUsage.set(date, (dailyUsage.get(date) || 0) + u.creditsUsed);
+      });
+      
+      const dailyUsageArray = Array.from(dailyUsage.entries())
+        .map(([date, credits]) => ({ date, credits }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+      
+      res.json({
+        totalCreditsConsumed,
+        totalImagesProcessed,
+        averageCreditsPerUser,
+        uniqueUsers: userStats.size,
+        topUsers,
+        dailyUsage: dailyUsageArray
+      });
+    } catch (error) {
+      console.error("Error fetching RemoveBG stats:", error);
+      res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  });
+
   // ========== REMOVEBG ROUTES ==========
   app.use("/api/removebg", removeBgRoutes);
 

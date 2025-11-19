@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import { storage } from '../storage';
 import { sendEmail, emailTemplates } from '../utils/email';
-import { DEFAULT_SERVICE_ID } from '@shared/constants';
+import { DEFAULT_SERVICE_ID, REMOVEBG_SERVICE_ID, REMOVEBG_PLANS } from '@shared/constants';
 
 /**
  * Payment Monitoring Cron Jobs
@@ -176,6 +176,62 @@ async function sendPaymentFinalWarningEmails() {
 }
 
 /**
+ * DAY 5 at 1:00 AM - Renew RemoveBG credits for active subscribers
+ * Runs early on payment due day to ensure credits are available
+ */
+async function renewRemoveBGCredits() {
+  console.log('🔄 [CRON] Running RemoveBG credit renewal (Day 5)...');
+  
+  try {
+    // Get all active UserServices for RemoveBG service
+    const userServices = await storage.getUserServicesByServiceId(REMOVEBG_SERVICE_ID);
+    const activeUserServices = userServices.filter(us => us.status === 'ATIVO');
+    
+    console.log(`   Found ${activeUserServices.length} active RemoveBG subscriptions to renew`);
+    
+    let renewedCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+
+    for (const userService of activeUserServices) {
+      // Check if renewal is due on day 5 of THIS month
+      if (isPaymentDueThisMonth(userService.proximoPagamento)) {
+        // Find the plan details
+        const plan = REMOVEBG_PLANS.find(p => p.id === userService.planId);
+        if (!plan) {
+          console.warn(`   Plan ${userService.planId} not found for UserService ${userService.id}`);
+          failedCount++;
+          continue;
+        }
+
+        // Get user for logging
+        const user = await storage.getUser(userService.userId);
+        const userEmail = user?.email || `User ${userService.userId}`;
+
+        // Reset credits to plan amount
+        const updatedUserService = await storage.updateUserService(userService.id, {
+          creditsAvailable: plan.credits,
+        });
+
+        if (updatedUserService) {
+          renewedCount++;
+          console.log(`   ✅ Renewed ${plan.credits} credits for ${userEmail} (Plan: ${plan.name})`);
+        } else {
+          failedCount++;
+          console.error(`   Failed to renew credits for ${userEmail}`);
+        }
+      } else {
+        skippedCount++;
+      }
+    }
+
+    console.log(`✅ [CRON] RemoveBG credit renewal completed: ${renewedCount} renewed, ${failedCount} failed, ${skippedCount} skipped`);
+  } catch (error) {
+    console.error('❌ [CRON ERROR] RemoveBG credit renewal failed:', error);
+  }
+}
+
+/**
  * DAY 6 at 9:00 AM - Block users and send "Access blocked" email
  * Blocks users whose payment is overdue (proximoPagamento < today)
  */
@@ -270,6 +326,12 @@ export function initializePaymentCron() {
     });
     console.log('   ✅ Scheduled: Day 4, 9:00 AM - Final warning emails (payment due tomorrow)');
 
+    // DAY 5 at 1:00 AM - Renew RemoveBG credits
+    cron.schedule('0 1 5 * *', renewRemoveBGCredits, {
+      timezone: 'America/Sao_Paulo',
+    });
+    console.log('   ✅ Scheduled: Day 5, 1:00 AM - RemoveBG credit renewal');
+
     // DAY 6 at 9:00 AM - Block overdue users (1 day grace period after day 5)
     cron.schedule('0 9 6 * *', blockOverdueUsers, {
       timezone: 'America/Sao_Paulo',
@@ -293,4 +355,5 @@ export const manualTriggers = {
   sendPaymentPreReminderEmails,
   sendPaymentFinalWarningEmails,
   blockOverdueUsers,
+  renewRemoveBGCredits,
 };

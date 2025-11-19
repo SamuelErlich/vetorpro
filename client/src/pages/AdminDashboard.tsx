@@ -9,6 +9,9 @@ import CreateUserDialog from "@/components/CreateUserDialog";
 import CredentialFormDialog from "@/components/CredentialFormDialog";
 import EditStatusDialog from "@/components/EditStatusDialog";
 import PaymentHistoryDrawer from "@/components/PaymentHistoryDrawer";
+import AdminRemoveBgPanel from "@/components/AdminRemoveBgPanel";
+import AdminRemoveBgUsage from "@/components/AdminRemoveBgUsage";
+import AdminRemoveBgStats from "@/components/AdminRemoveBgStats";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import UserFormDialog from "@/components/UserFormDialog";
 import { Button } from "@/components/ui/button";
@@ -25,10 +28,11 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Credential, Payment, User as UserType } from "@shared/schema";
-import { CreditCard, Download, Key, LogOut, Users } from "lucide-react";
+import { CreditCard, Download, Key, LogOut, Users, Image, BarChart3 } from "lucide-react";
 
 type AuthMeResponse = { user: UserType };
 type PaymentWithUser = Payment & { userEmail: string };
@@ -53,6 +57,10 @@ export default function AdminDashboard() {
   const [editingStatusUser, setEditingStatusUser] = useState<UserType | null>(null);
   const [paymentHistoryDrawerOpen, setPaymentHistoryDrawerOpen] = useState(false);
   const [viewingPaymentsUser, setViewingPaymentsUser] = useState<UserType | null>(null);
+  
+  // RemoveBG states
+  const [removeBgTab, setRemoveBgTab] = useState("subscriptions");
+  const [viewingUsageUserId, setViewingUsageUserId] = useState<string | undefined>(undefined);
 
   // Check authentication
   const { data: currentUser, isLoading: authLoading } = useQuery<AuthMeResponse>({
@@ -234,6 +242,7 @@ export default function AdminDashboard() {
     { title: "Usuários", icon: Users, id: "users" },
     { title: "Credenciais", icon: Key, id: "credentials" },
     { title: "Pagamentos", icon: CreditCard, id: "payments" },
+    { title: "RemoveBG", icon: Image, id: "removebg" },
   ];
 
   const handleLogout = () => {
@@ -454,6 +463,58 @@ export default function AdminDashboard() {
                     />
                   )}
                 </>
+              )}
+
+              {activeTab === "removebg" && (
+                <div className="space-y-8">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold">Gerenciar RemoveBG</h2>
+                  </div>
+
+                  <Tabs value={removeBgTab} onValueChange={setRemoveBgTab}>
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="subscriptions" data-testid="tab-subscriptions">
+                        <Users className="h-4 w-4 mr-2" />
+                        Assinaturas
+                      </TabsTrigger>
+                      <TabsTrigger value="usage" data-testid="tab-usage">
+                        <Image className="h-4 w-4 mr-2" />
+                        Histórico de Uso
+                      </TabsTrigger>
+                      <TabsTrigger value="stats" data-testid="tab-stats">
+                        <BarChart3 className="h-4 w-4 mr-2" />
+                        Estatísticas
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="subscriptions" className="mt-6">
+                      <AdminRemoveBgPanel 
+                        onViewUsageHistory={(userId) => {
+                          setViewingUsageUserId(userId);
+                          setRemoveBgTab("usage");
+                        }}
+                      />
+                    </TabsContent>
+
+                    <TabsContent value="usage" className="mt-6">
+                      <AdminRemoveBgUsage userId={viewingUsageUserId} />
+                      {viewingUsageUserId && (
+                        <Button
+                          variant="outline"
+                          onClick={() => setViewingUsageUserId(undefined)}
+                          className="mt-4"
+                          data-testid="button-clear-filter"
+                        >
+                          Limpar Filtro
+                        </Button>
+                      )}
+                    </TabsContent>
+
+                    <TabsContent value="stats" className="mt-6">
+                      <AdminRemoveBgStats />
+                    </TabsContent>
+                  </Tabs>
+                </div>
               )}
             </div>
           </main>

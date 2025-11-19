@@ -84,6 +84,7 @@ export interface IStorage {
   
   // RemoveBG
   getRemoveBgUsageByUserId(userId: string): Promise<RemoveBgUsage[]>;
+  getAllRemoveBgUsage(): Promise<RemoveBgUsage[]>;
   createRemoveBgUsage(usage: InsertRemoveBgUsage): Promise<RemoveBgUsage>;
   getRemoveBgPlans(): Promise<RemoveBgPlan[]>;
   getRemoveBgPlan(id: string): Promise<RemoveBgPlan | undefined>;
@@ -430,6 +431,10 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getAllRemoveBgUsage(): Promise<RemoveBgUsage[]> {
+    return Array.from(this.removeBgUsage.values());
+  }
+
   async createRemoveBgUsage(insertUsage: InsertRemoveBgUsage): Promise<RemoveBgUsage> {
     const id = randomUUID();
     const usage: RemoveBgUsage = {
@@ -730,6 +735,10 @@ class PostgresStorage implements IStorage {
   // RemoveBG
   async getRemoveBgUsageByUserId(userId: string): Promise<RemoveBgUsage[]> {
     return await this.db.select().from(removeBgUsage).where(eq(removeBgUsage.userId, userId));
+  }
+
+  async getAllRemoveBgUsage(): Promise<RemoveBgUsage[]> {
+    return await this.db.select().from(removeBgUsage);
   }
 
   async createRemoveBgUsage(insertUsage: InsertRemoveBgUsage): Promise<RemoveBgUsage> {
