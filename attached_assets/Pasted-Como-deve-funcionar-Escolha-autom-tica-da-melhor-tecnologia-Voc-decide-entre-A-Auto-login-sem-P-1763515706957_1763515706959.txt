@@ -1,0 +1,161 @@
+Como deve funcionar
+Escolha automática da melhor tecnologia
+
+Você decide entre:
+
+A) Auto-login sem Puppeteer (preferido)
+
+Se permitir:
+
+fazer login no Vectorizer via POST request
+
+receber cookie ou JWT
+
+montar URL com session válida
+
+redirecionar usuário com esse cookie
+
+OU
+B) Auto-login via Puppeteer (fallback)
+
+Usar Puppeteer em servidor headless:
+
+abrir página
+
+preencher email
+
+preencher senha
+
+clicar em login
+
+capturar cookie de sessão
+
+retornar cookie para o frontend
+
+frontend abre https://vectorizer.ai já logado usando esse cookie
+
+Você decide automaticamente qual método funciona.
+
+3. Backend – Nova rota API
+
+Criar rota:
+
+GET /api/vectorizer/autologin
+
+verificar se usuário está AUTENTICADO
+
+verificar se status do usuário é ATIVO
+
+buscar credencial atual:
+
+emailVectorizer
+
+senhaVectorizer
+
+rodar o método escolhido:
+
+tentativa A (HTTP login direto)
+
+se falhar ➜ método B (Puppeteer)
+
+Retornar para o frontend:
+
+{
+  success: true,
+  cookie: "...",
+  redirectUrl: "https://vectorizer.ai",
+  method: "http" | "puppeteer"
+}
+
+4. Frontend – Botão de auto-login
+
+No painel do usuário (onde aparecem as credenciais):
+
+Adicionar botão:
+
+Entrar no Vectorizer (Auto Login)
+
+
+Ação:
+
+Chamar /api/vectorizer/autologin
+
+Receber cookie
+
+Abrir nova aba com:
+
+window.open("https://vectorizer.ai", "_blank")
+
+
+Mas antes, aplicar o cookie no navegador via:
+
+Set-Cookie header do backend
+ou
+
+Document.cookie via frontend (se permitido)
+
+Você decide a forma mais confiável.
+
+5. Segurança
+
+Nunca salvar ou expor senha no frontend
+
+Apenas enviar o cookie final
+
+Executar Puppeteer somente em ambiente servidor
+
+Timeout máximo de 12 segundos
+
+Caso falhe, retornar erro amigável:
+
+{ success: false, error: "Falha ao autenticar automaticamente" }
+
+6. Não alterar nada que já existe no sistema
+
+Não mexer:
+
+fluxo PIX
+
+pagamento
+
+webhook
+
+painel admin
+
+cronjobs
+
+status do usuário
+
+Apenas adicionar o módulo de auto-login.
+
+7. Organização que você deve decidir
+
+Você decide:
+
+criar pasta src/services/vectorizer
+
+criar arquivo autoLogin.ts
+
+criar adaptadores
+
+criar helper para Puppeteer
+
+decidir a melhor forma de pegar cookie
+
+decidir tratamento de erros
+
+8. Testes automáticos
+
+Após implementar, execute:
+
+Criar um usuário ATIVO
+
+Gerar credencial com email/senha válidos
+
+Testar método HTTP
+
+Testar fallback Puppeteer
+
+Abrir o Vectorizer já logado
+
+E confirmar tudo funcionando.
