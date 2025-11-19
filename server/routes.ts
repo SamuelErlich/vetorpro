@@ -790,13 +790,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get user's credentials (only if payment is active)
   app.get("/api/credentials", requireAuth, async (req, res) => {
     try {
-      const user = await storage.getUser(req.session.userId!);
+      const userId = req.session.userId!;
+      const user = await storage.getUser(userId);
       if (!user) {
         return res.status(404).json({ error: "Usuário não encontrado" });
       }
       
       // Get user's active subscriptions to services
-      const userServices = await storage.getUserServices(req.session.userId!);
+      const userServices = await storage.getUserServices(userId);
       const activeServices = userServices.filter(us => us.status === "ATIVO");
       
       // If no active services, return locked
@@ -804,17 +805,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ locked: true, credentials: [] });
       }
 
-      // Get credentials for each active service
-      let allCredentials: any[] = [];
-      for (const userService of activeServices) {
-        const serviceCredentials = await storage.getSharedCredentials(userService.serviceId);
-        allCredentials = allCredentials.concat(serviceCredentials);
-      }
+      // Get the service IDs that the user has active subscriptions for
+      const activeServiceIds = activeServices.map(us => us.serviceId);
+      
+      // Get credentials for this user that belong to their active services
+      const userCredentials = await storage.getCredentialsByUserAndServices(userId, activeServiceIds);
 
-      // Remove duplicates (if any credential belongs to multiple services)
-      const uniqueCredentials = Array.from(new Map(allCredentials.map(c => [c.id, c])).values());
-
-      res.json({ locked: false, credentials: uniqueCredentials });
+      res.json({ locked: false, credentials: userCredentials });
     } catch (error) {
       console.error("Get credentials error:", error);
       res.status(500).json({ error: "Erro ao buscar credenciais" });
@@ -853,6 +850,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ...validatedData,
         serviceId: validatedData.serviceId || DEFAULT_SERVICE_ID
       };
+      
+      // If creating credential for a specific user, verify they have the service
+      if (credentialData.userId) {
+        const userService = await storage.getUserService(credentialData.userId, credentialData.serviceId);
+        if (!userService) {
+          return res.status(400).json({ 
+            error: `Usuário não possui o serviço ${credentialData.serviceId}. Não é possível criar credencial.` 
+          });
+        }
+        if (userService.status !== "ATIVO") {
+          return res.status(400).json({ 
+            error: `Serviço ${credentialData.serviceId} do usuário não está ativo. Não é possível criar credencial.` 
+          });
+        }
+      }
+      
       const credential = await storage.createCredential(credentialData);
       res.status(201).json(credential);
     } catch (error) {

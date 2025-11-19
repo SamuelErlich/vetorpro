@@ -70,6 +70,7 @@ export interface IStorage {
   // Credentials
   getCredential(id: string): Promise<Credential | undefined>;
   getCredentialsByUserId(userId: string): Promise<Credential[]>;
+  getCredentialsByUserAndServices(userId: string, serviceIds: string[]): Promise<Credential[]>;
   getSharedCredentials(serviceId?: string): Promise<Credential[]>;
   getCredentialsByServiceId(serviceId: string): Promise<Credential[]>;
   getAllCredentials(): Promise<Credential[]>;
@@ -404,6 +405,12 @@ export class MemStorage implements IStorage {
   async getCredentialsByUserId(userId: string): Promise<Credential[]> {
     return Array.from(this.credentials.values()).filter(
       (cred) => cred.userId === userId,
+    );
+  }
+
+  async getCredentialsByUserAndServices(userId: string, serviceIds: string[]): Promise<Credential[]> {
+    return Array.from(this.credentials.values()).filter(
+      (cred) => cred.userId === userId && serviceIds.includes(cred.serviceId || 'vectorizer-001')
     );
   }
 
@@ -938,6 +945,23 @@ class PostgresStorage implements IStorage {
 
   async getCredentialsByUserId(userId: string): Promise<Credential[]> {
     return await this.db.select().from(credentials).where(eq(credentials.userId, userId));
+  }
+
+  async getCredentialsByUserAndServices(userId: string, serviceIds: string[]): Promise<Credential[]> {
+    // Get credentials for this user that belong to any of the specified services
+    // For backward compatibility, treat null serviceId as vectorizer-001
+    const conditions = serviceIds.map(serviceId => 
+      or(
+        and(eq(credentials.userId, userId), eq(credentials.serviceId, serviceId)),
+        and(eq(credentials.userId, userId), isNull(credentials.serviceId), eq(sql`${serviceId}`, 'vectorizer-001'))
+      )
+    );
+    
+    if (conditions.length === 0) return [];
+    
+    return await this.db.select().from(credentials).where(
+      conditions.length === 1 ? conditions[0] : or(...conditions)
+    );
   }
 
   async getSharedCredentials(serviceId?: string): Promise<Credential[]> {
