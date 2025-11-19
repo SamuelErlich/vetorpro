@@ -1,7 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, Lock } from "lucide-react";
+import { Copy, Lock, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 
 interface CredentialItem {
   label: string;
@@ -15,9 +17,48 @@ interface CredentialsCardProps {
 }
 
 export default function CredentialsCard({ month, credentials, isLocked }: CredentialsCardProps) {
+  const { toast } = useToast();
+  const [isLoadingVectorizer, setIsLoadingVectorizer] = useState(false);
+
   const handleCopy = (value: string) => {
     navigator.clipboard.writeText(value);
     console.log('Copied:', value);
+  };
+
+  const handleVectorizerLogin = async () => {
+    setIsLoadingVectorizer(true);
+    try {
+      const response = await fetch('/api/vectorizer/autologin', {
+        credentials: 'include',
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao acessar Vectorizer",
+          description: data.error || "Não foi possível gerar o link de acesso",
+        });
+        return;
+      }
+
+      // Open Vectorizer SSO URL in new tab
+      window.open(data.url, '_blank');
+      
+      toast({
+        title: "Abrindo Vectorizer",
+        description: "Você será autenticado automaticamente",
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Não foi possível conectar ao servidor",
+      });
+    } finally {
+      setIsLoadingVectorizer(false);
+    }
   };
 
   if (isLocked) {
@@ -71,6 +112,18 @@ export default function CredentialsCard({ month, credentials, isLocked }: Creden
               </Button>
             </div>
           ))}
+          
+          <div className="pt-4 border-t">
+            <Button 
+              onClick={handleVectorizerLogin}
+              disabled={isLoadingVectorizer}
+              className="w-full"
+              data-testid="button-vectorizer-autologin"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              {isLoadingVectorizer ? "Conectando..." : "Entrar no Vectorizer (1 Clique)"}
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>
