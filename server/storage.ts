@@ -176,6 +176,7 @@ export class MemStorage implements IStorage {
       data: insertCredential.data,
       month: insertCredential.month,
       userId: insertCredential.userId ?? null,
+      serviceId: insertCredential.serviceId ?? null,
       id 
     };
     this.credentials.set(id, credential);
@@ -215,6 +216,7 @@ export class MemStorage implements IStorage {
     // amount is always string (cents as string like "1750") per InsertPayment type
     const payment: Payment = { 
       userId: insertPayment.userId,
+      serviceId: insertPayment.serviceId ?? null,
       amount: insertPayment.amount, // Already string from schema
       status: insertPayment.status || "pending",
       txid: insertPayment.txid || null,

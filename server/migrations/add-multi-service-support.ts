@@ -1,6 +1,7 @@
-import { db } from "../db";
 import { services, userServices, payments, credentials, users } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
 
 /**
  * Migration para adicionar suporte a múltiplos serviços
@@ -20,10 +21,13 @@ export async function runMultiServiceMigration() {
   try {
     console.log("🚀 [MIGRATION] Iniciando migração para suporte multi-serviço...");
 
+    // Inicializar conexão com banco
+    const sqlClient = neon(process.env.DATABASE_URL!);
+    const db = drizzle(sqlClient);
+
     // Passo 1: Verificar se o serviço Vectorizer já existe
-    let vectorizerService = await db.query.services.findFirst({
-      where: eq(services.id, VECTORIZER_SERVICE_ID),
-    });
+    const existingServices = await db.select().from(services).where(eq(services.id, VECTORIZER_SERVICE_ID));
+    let vectorizerService = existingServices[0];
 
     if (!vectorizerService) {
       console.log("📦 [MIGRATION] Criando serviço padrão: Vectorizer");
@@ -69,11 +73,11 @@ export async function runMultiServiceMigration() {
     
     for (const user of allUsers) {
       // Verificar se já existe uma assinatura para este usuário
-      const existingSubscription = await db.query.userServices.findFirst({
-        where: sql`${userServices.userId} = ${user.id} AND ${userServices.serviceId} = ${VECTORIZER_SERVICE_ID}`,
-      });
+      const existingSubscriptions = await db.select().from(userServices).where(
+        sql`${userServices.userId} = ${user.id} AND ${userServices.serviceId} = ${VECTORIZER_SERVICE_ID}`
+      );
 
-      if (!existingSubscription) {
+      if (existingSubscriptions.length === 0) {
         // Criar assinatura baseada no status atual do usuário
         await db.insert(userServices).values({
           userId: user.id,
@@ -101,15 +105,5 @@ export async function runMultiServiceMigration() {
   }
 }
 
-// Auto-executar se este arquivo for executado diretamente
-if (require.main === module) {
-  runMultiServiceMigration()
-    .then(() => {
-      console.log("Migration completed successfully");
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error("Migration failed:", error);
-      process.exit(1);
-    });
-}
+// Para executar esta migration manualmente:
+// npx tsx server/migrations/run-migration.ts
