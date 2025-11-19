@@ -296,7 +296,7 @@ export default function ServiceDetails() {
         </div>
 
         <Tabs defaultValue="info" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className={serviceId === "removebg-001" ? "grid w-full grid-cols-3" : "grid w-full grid-cols-4"}>
             <TabsTrigger value="info" className="flex items-center gap-2">
               <Info className="h-4 w-4" />
               Informações
@@ -305,10 +305,12 @@ export default function ServiceDetails() {
               <Users className="h-4 w-4" />
               Assinantes ({activeSubscribers})
             </TabsTrigger>
-            <TabsTrigger value="credentials" className="flex items-center gap-2">
-              <Key className="h-4 w-4" />
-              Credenciais
-            </TabsTrigger>
+            {serviceId !== "removebg-001" && (
+              <TabsTrigger value="credentials" className="flex items-center gap-2">
+                <Key className="h-4 w-4" />
+                Credenciais
+              </TabsTrigger>
+            )}
             <TabsTrigger value="usage" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Uso
@@ -644,17 +646,18 @@ export default function ServiceDetails() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="credentials" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle>Credenciais Compartilhadas</CardTitle>
-                    <CardDescription>
-                      Credenciais disponíveis para todos os assinantes ativos
-                    </CardDescription>
-                  </div>
-                  <Dialog>
+          {serviceId !== "removebg-001" && (
+            <TabsContent value="credentials" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Credenciais Compartilhadas</CardTitle>
+                      <CardDescription>
+                        Credenciais disponíveis para todos os assinantes ativos
+                      </CardDescription>
+                    </div>
+                    <Dialog>
                     <DialogTrigger asChild>
                       <Button data-testid="button-add-credential">
                         <Plus className="mr-2 h-4 w-4" />
@@ -742,6 +745,7 @@ export default function ServiceDetails() {
               </CardContent>
             </Card>
           </TabsContent>
+          )}
 
           <TabsContent value="usage" className="space-y-4">
             <Card>

@@ -248,7 +248,6 @@ export default function AdminDashboard() {
   const menuItems = [
     { title: "Usuários", icon: Users, id: "users" },
     { title: "Serviços", icon: Settings, id: "services" },
-    { title: "Credenciais", icon: Key, id: "credentials" },
     { title: "Pagamentos", icon: CreditCard, id: "payments" },
     { title: "RemoveBG", icon: Image, id: "removebg" },
   ];
@@ -447,22 +446,6 @@ export default function AdminDashboard() {
                         </CardContent>
                       </Card>
                     </>
-                  )}
-                </>
-              )}
-
-              {activeTab === "credentials" && (
-                <>
-                  {credentialsLoading || usersLoading ? (
-                    <Skeleton className="h-96 w-full" />
-                  ) : (
-                    <AdminCredentialTable
-                      credentials={enrichedCredentials}
-                      users={usersData || []}
-                      onAdd={handleAddCredential}
-                      onEdit={handleEditCredential}
-                      onDelete={handleDeleteCredential}
-                    />
                   )}
                 </>
               )}
