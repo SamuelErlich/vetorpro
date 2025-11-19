@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import {
   Dialog,
@@ -37,6 +37,13 @@ export default function EditStatusDialog({
 }: EditStatusDialogProps) {
   const [newStatus, setNewStatus] = useState(currentStatus);
   const { toast } = useToast();
+
+  // Reset newStatus when dialog opens or currentStatus changes
+  useEffect(() => {
+    if (open) {
+      setNewStatus(currentStatus);
+    }
+  }, [open, currentStatus]);
 
   const updateStatusMutation = useMutation({
     mutationFn: (status: string) =>
