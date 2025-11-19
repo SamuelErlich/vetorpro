@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,9 +58,20 @@ export default function PaymentPage() {
         title: "Pagamento Confirmado! 🎉",
         description: "Seu acesso foi liberado. Redirecionando...",
       });
-      setTimeout(() => {
-        setLocation('/dashboard');
-      }, 2000);
+      
+      // Invalidate relevant queries to ensure fresh data on dashboard
+      const refreshDashboardData = async () => {
+        await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+        await queryClient.invalidateQueries({ queryKey: ['/api/credentials'] });
+        await queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+        
+        // Redirect after cache invalidation
+        setTimeout(() => {
+          setLocation('/dashboard');
+        }, 2000);
+      };
+      
+      refreshDashboardData();
     }
   }, [paymentStatus, paymentConfirmed]);
 
