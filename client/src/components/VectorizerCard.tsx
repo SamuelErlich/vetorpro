@@ -1,11 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Monitor, CreditCard, Copy } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Monitor, CreditCard, Copy, ExternalLink } from "lucide-react";
 import type { UserService } from "@shared/schema";
 import { MONTHLY_PAYMENT_AMOUNT } from "@shared/constants";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface VectorizerCardProps {
   userService: UserService | null;
@@ -17,6 +24,7 @@ interface VectorizerCardProps {
 export default function VectorizerCard({ userService, credentials, onPayClick, isLocked }: VectorizerCardProps) {
   const { toast } = useToast();
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   
   // For backward compatibility, also check if userService is null (legacy users)
   // If no userService exists, fall back to checking if credentials exist
@@ -31,6 +39,43 @@ export default function VectorizerCard({ userService, credentials, onPayClick, i
       duration: 2000,
     });
     setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const handleVectorizerLogin = async () => {
+    setIsLoading(true);
+    try {
+      const response = await apiRequest("/api/vectorizer/autologin", {
+        method: "GET",
+      });
+
+      if (response.success) {
+        // Copiar senha para o clipboard
+        await navigator.clipboard.writeText(response.senha);
+        
+        // Abrir o link em nova aba
+        window.open(response.url, "_blank", "noopener,noreferrer");
+        
+        toast({
+          title: "Sucesso!",
+          description: "Email preenchido e senha copiada. Cole a senha no campo correspondente.",
+          duration: 5000,
+        });
+      } else {
+        toast({
+          title: "Erro",
+          description: response.error || "Não foi possível fazer o login automático",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível fazer o login automático",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -93,21 +138,35 @@ export default function VectorizerCard({ userService, credentials, onPayClick, i
               ))}
             </div>
 
-            <Button 
-              asChild
-              className="w-full"
-              variant="default"
-              data-testid="button-enter-vectorizer"
-            >
-              <a 
-                href="https://service.vectorizer.com"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Monitor className="h-4 w-4 mr-2" />
-                Entrar no Vectorizer (1 Clique)
-              </a>
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    className="w-full"
+                    variant="default"
+                    data-testid="button-enter-vectorizer"
+                    onClick={handleVectorizerLogin}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent" />
+                        Abrindo Vectorizer...
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Entrar no Vectorizer (1 Clique)
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>O email será preenchido automaticamente</p>
+                  <p>e a senha será copiada para você colar</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
 
