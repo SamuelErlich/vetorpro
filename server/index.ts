@@ -1,5 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
+import path from "path";
+import fs from "fs";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { initializeData } from "./init-data";
@@ -53,6 +55,23 @@ const corsOptions: cors.CorsOptions = {
 };
 
 app.use(cors(corsOptions));
+
+// Create uploads directory structure if it doesn't exist
+const uploadsPath = path.join(import.meta.dirname, '../uploads');
+const removeBgOriginalPath = path.join(uploadsPath, 'removebg', 'original');
+const removeBgProcessedPath = path.join(uploadsPath, 'removebg', 'processed');
+
+// Create directories if they don't exist
+[removeBgOriginalPath, removeBgProcessedPath].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`📁 Created directory: ${dir}`);
+  }
+});
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(uploadsPath));
+console.log(`📁 Serving uploads from: ${uploadsPath}`);
 
 declare module 'http' {
   interface IncomingMessage {
