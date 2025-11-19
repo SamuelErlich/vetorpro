@@ -1640,6 +1640,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin: Export payments to CSV
+  app.get("/api/admin/payments/export", requireAdmin, async (req, res) => {
+    try {
+      const payments = await storage.getAllPayments();
+      
+      // Enrich with user emails and service names
+      const paymentsWithDetails = await Promise.all(
+        payments.map(async (payment) => {
+          const user = await storage.getUser(payment.userId);
+          const service = payment.serviceId ? await storage.getService(payment.serviceId) : null;
+          return {
+            ...payment,
+            userEmail: user?.email || "Unknown",
+            serviceName: service?.name || "N/A",
+          };
+        })
+      );
+
+      // Sort by date descending
+      paymentsWithDetails.sort((a, b) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      // Create CSV header
+      const csvHeader = [
+        "ID Transação",
+        "Data",
+        "Hora",
+        "Email Usuário",
+        "Serviço",
+        "Valor (R$)",
+        "Status",
+        "Método",
+        "ID Pagamento"
+      ].join(",");
+
+      // Create CSV rows
+      const csvRows = paymentsWithDetails.map(payment => {
+        const date = new Date(payment.createdAt);
+        const formattedDate = date.toLocaleDateString("pt-BR");
+        const formattedTime = date.toLocaleTimeString("pt-BR");
+        const amount = (parseFloat(payment.amount) / 100).toFixed(2).replace(".", ",");
+        
+        // Map status to Portuguese
+        const statusMap: { [key: string]: string } = {
+          "pending": "Pendente",
+          "completed": "Concluído",
+          "paid": "Pago",
+          "failed": "Falhou",
+          "cancelled": "Cancelado"
+        };
+        const status = statusMap[payment.status] || payment.status;
+        
+        return [
+          payment.txid || payment.id,
+          formattedDate,
+          formattedTime,
+          payment.userEmail,
+          payment.serviceName,
+          amount,
+          status,
+          "PIX",
+          payment.id
+        ].map(field => `"${String(field).replace(/"/g, '""')}"`).join(",");
+      });
+
+      // Combine header and rows
+      const csv = [csvHeader, ...csvRows].join("\n");
+
+      // Set response headers for file download
+      res.setHeader("Content-Type", "text/csv; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="pagamentos-${new Date().toISOString().split("T")[0]}.csv"`
+      );
+      
+      // Add BOM for Excel UTF-8 compatibility
+      const bom = "\uFEFF";
+      res.send(bom + csv);
+      
+      console.log(`✅ [ADMIN] Payments exported by admin ${req.session.userId}`);
+    } catch (error) {
+      console.error("Export payments error:", error);
+      res.status(500).json({ error: "Erro ao exportar pagamentos" });
+    }
+  });
+
   // Admin: Delete payment (only pending or failed payments)
   app.delete("/api/admin/payments/:id", requireAdmin, async (req, res) => {
     try {
