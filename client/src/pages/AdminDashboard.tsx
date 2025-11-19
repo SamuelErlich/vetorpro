@@ -42,7 +42,7 @@ type PaymentWithUser = Payment & { userEmail: string };
 export default function AdminDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useState("services");
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
   const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
@@ -379,13 +379,7 @@ export default function AdminDashboard() {
                   {menuItems.map((item) => (
                     <SidebarMenuItem key={item.id}>
                       <SidebarMenuButton
-                        onClick={() => {
-                          if (item.id === "users") {
-                            setLocation('/admin/users');
-                          } else {
-                            setActiveTab(item.id);
-                          }
-                        }}
+                        onClick={() => setActiveTab(item.id)}
                         className={activeTab === item.id ? "bg-sidebar-accent" : ""}
                         data-testid={`link-${item.id}`}
                       >
@@ -414,7 +408,48 @@ export default function AdminDashboard() {
 
           <main className="flex-1 overflow-auto p-8">
             <div className="max-w-7xl mx-auto space-y-8">
-              {/* Users tab now redirects to /admin/users */}
+              {activeTab === "users" && (
+                <>
+                  {usersLoading ? (
+                    <Skeleton className="h-96 w-full" />
+                  ) : (
+                    <>
+                      <Card>
+                        <CardHeader>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <CardTitle>Gerenciar Usuários</CardTitle>
+                              <CardDescription>
+                                Gerencie os usuários e suas assinaturas
+                              </CardDescription>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button onClick={handleExportCSV} variant="outline" data-testid="button-export">
+                                <Download className="h-4 w-4 mr-2" />
+                                Exportar CSV
+                              </Button>
+                              <Button onClick={handleAddUser} data-testid="button-add-user">
+                                <Users className="h-4 w-4 mr-2" />
+                                Adicionar Usuário
+                              </Button>
+                            </div>
+                          </div>
+                        </CardHeader>
+                        <CardContent>
+                          <AdminUsersFilters onFiltersChange={handleFiltersChange} />
+                          <AdminUserTable
+                            users={usersData || []}
+                            onEdit={handleEditUser}
+                            onDelete={handleDeleteUser}
+                            onEditStatus={handleEditStatus}
+                            onViewPayments={handleViewPayments}
+                          />
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+                </>
+              )}
 
               {activeTab === "credentials" && (
                 <>
