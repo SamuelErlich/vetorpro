@@ -1,7 +1,14 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { memo, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { 
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { 
   Table, 
   TableBody, 
@@ -10,14 +17,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Edit, Trash2, Plus, Search } from "lucide-react";
+import { Edit, Plus, Search, Trash2 } from "lucide-react";
 
 interface Credential {
   id: string;
@@ -40,19 +40,19 @@ interface AdminCredentialTableProps {
   onDelete: (credentialId: string) => void;
 }
 
-export default function AdminCredentialTable({ 
+const AdminCredentialTable = memo(({ 
   credentials, 
   users,
   onAdd, 
   onEdit, 
   onDelete 
-}: AdminCredentialTableProps) {
+}: AdminCredentialTableProps) => {
   const [search, setSearch] = useState("");
 
-  const filteredCredentials = credentials.filter(cred => {
-    const matchesSearch = cred.month.toLowerCase().includes(search.toLowerCase());
-    return matchesSearch;
-  });
+  const filteredCredentials = useMemo(() => 
+    credentials.filter(cred => 
+      cred.month.toLowerCase().includes(search.toLowerCase())
+    ), [credentials, search]);
 
   return (
     <Card>
@@ -133,4 +133,8 @@ export default function AdminCredentialTable({
       </CardContent>
     </Card>
   );
-}
+});
+
+AdminCredentialTable.displayName = "AdminCredentialTable";
+
+export default AdminCredentialTable;

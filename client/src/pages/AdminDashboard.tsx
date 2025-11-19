@@ -1,6 +1,17 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import AdminCredentialTable from "@/components/AdminCredentialTable";
+import AdminPaymentTable from "@/components/AdminPaymentTable";
+import AdminUsersFilters from "@/components/AdminUsersFilters";
+import AdminUserTable from "@/components/AdminUserTable";
+import CreateUserDialog from "@/components/CreateUserDialog";
+import CredentialFormDialog from "@/components/CredentialFormDialog";
+import EditStatusDialog from "@/components/EditStatusDialog";
+import PaymentHistoryDrawer from "@/components/PaymentHistoryDrawer";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import UserFormDialog from "@/components/UserFormDialog";
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -13,22 +24,11 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Button } from "@/components/ui/button";
-import { Users, CreditCard, Key, LogOut, Download } from "lucide-react";
-import { ThemeToggle } from "@/components/ThemeToggle";
-import AdminUserTable from "@/components/AdminUserTable";
-import AdminPaymentTable from "@/components/AdminPaymentTable";
-import AdminCredentialTable from "@/components/AdminCredentialTable";
-import UserFormDialog from "@/components/UserFormDialog";
-import CreateUserDialog from "@/components/CreateUserDialog";
-import CredentialFormDialog from "@/components/CredentialFormDialog";
-import AdminUsersFilters from "@/components/AdminUsersFilters";
-import EditStatusDialog from "@/components/EditStatusDialog";
-import PaymentHistoryDrawer from "@/components/PaymentHistoryDrawer";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { User as UserType, Credential, Payment } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { Credential, Payment, User as UserType } from "@shared/schema";
+import { CreditCard, Download, Key, LogOut, Users } from "lucide-react";
 
 type AuthMeResponse = { user: UserType };
 type PaymentWithUser = Payment & { userEmail: string };
@@ -40,8 +40,8 @@ export default function AdminDashboard() {
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [createUserDialogOpen, setCreateUserDialogOpen] = useState(false);
   const [credentialDialogOpen, setCredentialDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<any>(null);
-  const [editingCredential, setEditingCredential] = useState<any>(null);
+  const [editingUser, setEditingUser] = useState<UserType | null>(null);
+  const [editingCredential, setEditingCredential] = useState<Credential | null>(null);
   
   // New states for filters and dialogs
   const [userFilters, setUserFilters] = useState<{
@@ -50,9 +50,9 @@ export default function AdminDashboard() {
     sort?: string;
   }>({});
   const [editStatusDialogOpen, setEditStatusDialogOpen] = useState(false);
-  const [editingStatusUser, setEditingStatusUser] = useState<any>(null);
+  const [editingStatusUser, setEditingStatusUser] = useState<UserType | null>(null);
   const [paymentHistoryDrawerOpen, setPaymentHistoryDrawerOpen] = useState(false);
-  const [viewingPaymentsUser, setViewingPaymentsUser] = useState<any>(null);
+  const [viewingPaymentsUser, setViewingPaymentsUser] = useState<UserType | null>(null);
 
   // Check authentication
   const { data: currentUser, isLoading: authLoading } = useQuery<AuthMeResponse>({
@@ -246,7 +246,7 @@ export default function AdminDashboard() {
 
   const handleEditUser = (userId: string) => {
     const user = usersData?.find((u: any) => u.id === userId);
-    setEditingUser(user);
+    setEditingUser(user ?? null);
     setUserDialogOpen(true);
   };
 
@@ -271,7 +271,7 @@ export default function AdminDashboard() {
 
   const handleEditCredential = (credentialId: string) => {
     const credential = credentialsData?.find((c: any) => c.id === credentialId);
-    setEditingCredential(credential);
+    setEditingCredential(credential ?? null);
     setCredentialDialogOpen(true);
   };
 
@@ -299,13 +299,13 @@ export default function AdminDashboard() {
 
   const handleEditStatus = (userId: string) => {
     const user = usersData?.find((u: any) => u.id === userId);
-    setEditingStatusUser(user);
+    setEditingStatusUser(user ?? null);
     setEditStatusDialogOpen(true);
   };
 
   const handleViewPayments = (userId: string) => {
     const user = usersData?.find((u: any) => u.id === userId);
-    setViewingPaymentsUser(user);
+    setViewingPaymentsUser(user ?? null);
     setPaymentHistoryDrawerOpen(true);
   };
 
@@ -469,14 +469,14 @@ export default function AdminDashboard() {
         open={userDialogOpen}
         onClose={() => setUserDialogOpen(false)}
         onSubmit={handleSubmitUser}
-        user={editingUser}
+        user={editingUser ?? undefined}
       />
 
       <CredentialFormDialog
         open={credentialDialogOpen}
         onClose={() => setCredentialDialogOpen(false)}
         onSubmit={handleSubmitCredential}
-        credential={editingCredential}
+        credential={editingCredential ?? undefined}
       />
 
       {editingStatusUser && (

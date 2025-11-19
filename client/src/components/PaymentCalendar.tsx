@@ -1,5 +1,6 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { memo, useCallback } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Calendar, CheckCircle, Clock, XCircle } from "lucide-react";
 
 interface PaymentRecord {
@@ -13,8 +14,8 @@ interface PaymentCalendarProps {
   payments: PaymentRecord[];
 }
 
-export default function PaymentCalendar({ payments }: PaymentCalendarProps) {
-  const getStatusBadge = (status: string) => {
+const PaymentCalendar = memo(({ payments }: PaymentCalendarProps) => {
+  const getStatusBadge = useCallback((status: string) => {
     switch (status) {
       case "paid":
         return (
@@ -40,7 +41,7 @@ export default function PaymentCalendar({ payments }: PaymentCalendarProps) {
       default:
         return null;
     }
-  };
+  }, []);
 
   return (
     <Card>
@@ -76,4 +77,8 @@ export default function PaymentCalendar({ payments }: PaymentCalendarProps) {
       </CardContent>
     </Card>
   );
-}
+});
+
+PaymentCalendar.displayName = "PaymentCalendar";
+
+export default PaymentCalendar;

@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
   Table, 
   TableBody, 
@@ -10,7 +10,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { Edit, Trash2, UserPlus, History, Settings } from "lucide-react";
+import { Edit, History, Settings, Trash2, UserPlus } from "lucide-react";
 
 interface User {
   id: string;
@@ -28,14 +28,14 @@ interface AdminUserTableProps {
   onViewPayments?: (userId: string) => void;
 }
 
-export default function AdminUserTable({ 
+const AdminUserTable = memo(({ 
   users, 
   onAdd, 
   onEdit, 
   onDelete, 
   onEditStatus, 
   onViewPayments 
-}: AdminUserTableProps) {
+}: AdminUserTableProps) => {
   return (
     <Card>
       <CardHeader>
@@ -135,4 +135,8 @@ export default function AdminUserTable({
       </CardContent>
     </Card>
   );
-}
+});
+
+AdminUserTable.displayName = "AdminUserTable";
+
+export default AdminUserTable;

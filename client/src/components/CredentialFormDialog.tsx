@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 
 interface Credential {
   id: string;
-  userId: string;
+  userId: string | null;
+  serviceId: string | null;
   month: string;
   data: string;
 }
