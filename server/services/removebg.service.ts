@@ -166,7 +166,7 @@ export class RemoveBgService {
    */
   async saveImage(buffer: Buffer, filename: string, directory: string): Promise<string> {
     try {
-      const uploadDir = path.join(process.cwd(), "public", "uploads", directory);
+      const uploadDir = path.join(process.cwd(), "uploads", directory);
       
       // Create directory if it doesn't exist
       if (!fs.existsSync(uploadDir)) {
@@ -175,6 +175,8 @@ export class RemoveBgService {
 
       const filepath = path.join(uploadDir, filename);
       fs.writeFileSync(filepath, buffer);
+      
+      console.log(`✅ Saved image: ${filepath}`);
       
       // Return web-accessible path
       return `/uploads/${directory}/${filename}`;
