@@ -69,6 +69,7 @@ export async function runMultiServiceMigration() {
     
     // Buscar todos os usuários
     const allUsers = await db.select().from(users);
+    let createdCount = 0;
     
     for (const user of allUsers) {
       // Verificar se já existe uma assinatura para este usuário
@@ -85,11 +86,11 @@ export async function runMultiServiceMigration() {
           ultimoPagamento: user.ultimoPagamento,
           proximoPagamento: user.nextPaymentDate,
         });
-        console.log(`  ✓ Criada assinatura para ${user.email}`);
+        createdCount++;
       }
     }
 
-    console.log(`✅ [MIGRATION] Assinaturas criadas para ${allUsers.length} usuários`);
+    console.log(`✅ [MIGRATION] ${createdCount} assinaturas criadas para ${allUsers.length} usuários`);
     console.log("🎉 [MIGRATION] Migração concluída com sucesso!");
 
     return {

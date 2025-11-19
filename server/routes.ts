@@ -770,8 +770,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (useDemoMode) {
         // DEMO MODE: Generate fake PIX for testing
-        console.log(`[DEMO MODE] Generating fake PIX for R$${sanitizedAmount} (txid: ${ourTxid})`);
-        
         // Generate a simple demo QR code (base64 encoded 1x1 pixel)
         const demoQrCodeBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
         
@@ -783,8 +781,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           status: "created",
           value: amountInCents
         };
-        
-        console.log(`[DEMO MODE] Created demo payment with our txid: ${ourTxid}`);
       } else {
         apiAttempted = true;
         // PRODUCTION MODE: Call real PushinPay API
@@ -794,16 +790,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let webhookUrl: string | undefined = undefined;
         if (process.env.REPLIT_DEV_DOMAIN) {
           webhookUrl = `https://${process.env.REPLIT_DEV_DOMAIN}/api/webhook/pushinpay`;
-        } else {
-          console.warn("⚠️  REPLIT_DEV_DOMAIN not set - webhook notifications will not work!");
         }
 
         if (!pushinpayToken) {
           console.error("PUSHINPAY_TOKEN not configured");
           return res.status(500).json({ error: "Configuração de pagamento não encontrada" });
         }
-
-        console.log(`Generating PIX for R$${sanitizedAmount} (${amountInCents} cents) with txid: ${ourTxid}`);
 
         // CRITICAL: Send our own TXID to PushinPay
         const pushinpayResponse = await fetch("https://api.pushinpay.com.br/api/pix/cashIn", {
@@ -825,8 +817,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("PushinPay API error:", pushinpayResponse.status, errorText);
           
           // Fallback to DEMO mode if API is unavailable
-          console.log("[AUTO DEMO MODE] PushinPay API unavailable, using demo mode");
-          
           const demoQrCodeBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
           
           pixData = {
@@ -837,11 +827,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             status: "created",
             value: amountInCents
           };
-          
-          console.log(`[AUTO DEMO MODE] Created demo payment with our txid: ${ourTxid}`);
         } else {
           pixData = await pushinpayResponse.json();
-          console.log("PushinPay response:", { pushinpayId: pixData.id, status: pixData.status });
           
           // CRITICAL: Overwrite ALL identifier fields with our TXID
           // This ensures consistency across client, database, and webhook
@@ -858,8 +845,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: "pending",
         txid: ourTxid, // CRITICAL: Use our own TXID
       });
-
-      console.log(`Payment record created: ${payment.id} with our txid: ${ourTxid}, amount: ${amountInCents} cents (R$${sanitizedAmount})`);
 
       // Ensure qr_code_base64 has proper data URI prefix
       let qrCodeBase64 = pixData.qr_code_base64;
@@ -1178,8 +1163,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Webhook from PushinPay
   app.post("/api/webhook/pushinpay", async (req, res) => {
     try {
-      console.log("PushinPay webhook received:", JSON.stringify(req.body, null, 2));
-      
       // SECURITY: Verify webhook authenticity using constant-time comparison
       // CRITICAL: PushinPay sends X-Token header (not x-webhook-secret!)
       const webhookSecret = process.env.PUSHINPAY_WEBHOOK_SECRET;
@@ -1194,7 +1177,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const receivedAuth = req.headers['authorization'] as string | undefined;
       
       if (!receivedToken && !receivedAuth) {
-        console.error("Webhook authentication failed - missing X-Token or Authorization header");
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -1227,7 +1209,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!isValid) {
-        console.error("Webhook authentication failed - invalid secret");
         return res.status(401).json({ error: "Unauthorized" });
       }
       
@@ -1239,7 +1220,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const receivedTxid = txid;
       
       if (!receivedTxid) {
-        console.error("Webhook missing transaction ID", req.body);
         return res.status(400).json({ error: "Missing transaction ID" });
       }
       

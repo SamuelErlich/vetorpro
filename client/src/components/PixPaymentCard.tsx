@@ -18,12 +18,10 @@ export default function PixPaymentCard({ qrCode, pixCode, amount, onReturn }: Pi
     navigator.clipboard.writeText(pixCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    console.log('PIX code copied');
   };
 
   const handleCheckPayment = () => {
     setWaiting(true);
-    console.log('Checking payment status...');
     setTimeout(() => {
       setWaiting(false);
     }, 2000);

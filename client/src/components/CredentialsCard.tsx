@@ -28,7 +28,6 @@ export default function CredentialsCard({ month, credentials, isLocked }: Creden
 
   const handleCopy = (value: string) => {
     navigator.clipboard.writeText(value);
-    console.log('Copied:', value);
   };
 
   const handleVectorizerLogin = async () => {
