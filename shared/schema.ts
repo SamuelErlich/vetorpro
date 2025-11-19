@@ -45,7 +45,7 @@ export const userServices = pgTable("user_services", {
 export const credentials = pgTable("credentials", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id),
-  serviceId: varchar("service_id").references(() => services.id), // Null por enquanto, será preenchido na migration
+  serviceId: varchar("service_id").notNull().references(() => services.id), // Service ID obrigatório para isolamento de dados
   month: text("month").notNull(),
   data: text("data").notNull(),
 });
@@ -53,7 +53,7 @@ export const credentials = pgTable("credentials", {
 export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
-  serviceId: varchar("service_id").references(() => services.id), // Null por enquanto, será preenchido na migration
+  serviceId: varchar("service_id").notNull().references(() => services.id), // Service ID obrigatório para rastreamento de pagamentos por serviço
   amount: decimal("amount", { precision: 10, scale: 0 }).notNull(), // Amount in cents as decimal string (e.g., "1750")
   status: text("status").notNull().default("pending"),
   txid: text("txid"),
