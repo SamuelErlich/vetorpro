@@ -223,22 +223,32 @@ export class MemStorage implements IStorage {
     // Delete all related records first (in order of dependencies)
     
     // 1. Delete password reset tokens
-    this.passwordResets = this.passwordResets.filter(pr => pr.userId !== id);
+    const passwordResets = Array.from(this.passwordResets.entries())
+      .filter(([_, pr]) => pr.userId !== id);
+    this.passwordResets = new Map(passwordResets);
     
     // 2. Delete RemoveBG usage records
-    this.removeBgUsage = this.removeBgUsage.filter(usage => usage.userId !== id);
+    const removeBgUsage = Array.from(this.removeBgUsage.entries())
+      .filter(([_, usage]) => usage.userId !== id);
+    this.removeBgUsage = new Map(removeBgUsage);
     
     // 3. Delete payments
-    this.payments = this.payments.filter(payment => payment.userId !== id);
+    const payments = Array.from(this.payments.entries())
+      .filter(([_, payment]) => payment.userId !== id);
+    this.payments = new Map(payments);
     
     // 4. Delete user services
-    this.userServices = this.userServices.filter(us => us.userId !== id);
+    const userServices = Array.from(this.userServices.entries())
+      .filter(([_, us]) => us.userId !== id);
+    this.userServices = new Map(userServices);
     
     // 5. Note: We don't delete removeBgApiKeys as they are created by admins
     // and should remain even if the admin user is deleted
     
     // 6. Delete credentials (if any have userId)
-    this.credentials = this.credentials.filter(cred => cred.userId !== id);
+    const credentials = Array.from(this.credentials.entries())
+      .filter(([_, cred]) => cred.userId !== id);
+    this.credentials = new Map(credentials);
     
     // Finally, delete the user
     return this.users.delete(id);
