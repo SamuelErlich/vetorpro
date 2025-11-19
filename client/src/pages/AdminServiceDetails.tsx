@@ -437,9 +437,17 @@ export default function ServiceDetails() {
                         className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                       >
                         <div className="flex-1">
-                          <p className="font-medium">{subscriber.user?.email}</p>
-                          <div className="flex gap-4 text-sm text-muted-foreground">
-                            <span>Status: {subscriber.status}</span>
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium">{subscriber.user?.email}</p>
+                            <Badge variant={
+                              subscriber.status === "ATIVO" ? "default" : 
+                              subscriber.status === "INATIVO" ? "secondary" : 
+                              "destructive"
+                            }>
+                              {subscriber.status}
+                            </Badge>
+                          </div>
+                          <div className="flex gap-4 text-sm text-muted-foreground mt-1">
                             {subscriber.ultimoPagamento && (
                               <span>Último pagamento: {new Date(subscriber.ultimoPagamento).toLocaleDateString()}</span>
                             )}
@@ -453,14 +461,14 @@ export default function ServiceDetails() {
                           size="sm"
                           onClick={() => toggleUserServiceMutation.mutate({
                             userId: subscriber.userId,
-                            newStatus: subscriber.status === "ATIVO" ? "BLOQUEADO" : "ATIVO"
+                            newStatus: subscriber.status === "ATIVO" ? "INATIVO" : "ATIVO"
                           })}
                           data-testid={`button-toggle-user-${subscriber.userId}`}
                         >
                           {subscriber.status === "ATIVO" ? (
                             <>
                               <ToggleLeft className="mr-2 h-4 w-4" />
-                              Bloquear
+                              Desativar
                             </>
                           ) : (
                             <>
