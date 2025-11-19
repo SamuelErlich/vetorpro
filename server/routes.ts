@@ -543,14 +543,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Parse credential data
       let email: string;
+      let senha: string;
       try {
         const data = JSON.parse(latestCredential.data);
         email = data.usuario || data.email;
+        senha = data.senha || data.password;
         
         if (!email) {
           return res.status(400).json({ 
             success: false, 
             error: "Email não encontrado nas credenciais" 
+          });
+        }
+        
+        if (!senha) {
+          return res.status(400).json({ 
+            success: false, 
+            error: "Senha não encontrada nas credenciais" 
           });
         }
       } catch (error) {
@@ -560,12 +569,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Build Vectorizer SSO URL
+      // Build Vectorizer SSO URL (pre-fills email only)
       const loginUrl = `https://cedarlakeventures.com/signon/v0/we54b154ba3adfa5e/single?lc=en-US&loginPath=%2Flogin_callback%3Fredir%3D%252F%253Fsignin%253D1&email=${encodeURIComponent(email)}`;
 
       res.json({ 
         success: true, 
-        url: loginUrl 
+        url: loginUrl,
+        email,
+        senha
       });
     } catch (error) {
       console.error("Vectorizer auto-login error:", error);
