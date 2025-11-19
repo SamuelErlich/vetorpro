@@ -1,0 +1,212 @@
+import { storage } from "../storage";
+import FormData from "form-data";
+import sharp from "sharp";
+import axios from "axios";
+import fs from "fs";
+import path from "path";
+
+const REMOVEBG_SERVICE_ID = "removebg-001";
+
+export class RemoveBgService {
+  /**
+   * Calculate credits needed based on image resolution in megapixels
+   * @param resolutionMp Megapixels of the image
+   * @returns Credits needed (1, 2, or 3)
+   */
+  calculateCreditsNeeded(resolutionMp: number): number {
+    if (resolutionMp <= 2) return 1; // Up to 2MP = 1 credit
+    if (resolutionMp <= 5) return 2; // 2-5MP = 2 credits
+    return 3; // Above 5MP = 3 credits
+  }
+
+  /**
+   * Get image resolution in megapixels from buffer
+   * @param buffer Image buffer
+   * @returns Megapixels (resolution)
+   */
+  async getImageResolution(buffer: Buffer): Promise<number> {
+    try {
+      const metadata = await sharp(buffer).metadata();
+      if (!metadata.width || !metadata.height) {
+        throw new Error("Unable to determine image dimensions");
+      }
+      
+      // Calculate megapixels (width * height / 1,000,000)
+      const megapixels = (metadata.width * metadata.height) / 1000000;
+      return Number(megapixels.toFixed(2));
+    } catch (error) {
+      console.error("Error getting image resolution:", error);
+      throw new Error("Failed to analyze image");
+    }
+  }
+
+  /**
+   * Process image with RemoveBG API
+   * @param buffer Image buffer
+   * @param apiKey RemoveBG API key
+   * @returns Processed image buffer
+   */
+  async processImage(buffer: Buffer, apiKey: string): Promise<Buffer> {
+    try {
+      const formData = new FormData();
+      formData.append("image_file", buffer, {
+        filename: "image.jpg",
+        contentType: "image/jpeg",
+      });
+      formData.append("size", "auto");
+
+      const response = await axios.post(
+        "https://api.remove.bg/v1.0/removebg",
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+            "X-Api-Key": apiKey,
+          },
+          responseType: "arraybuffer",
+        }
+      );
+
+      return Buffer.from(response.data);
+    } catch (error: any) {
+      if (error.response) {
+        const errorMessage = error.response.data?.errors?.[0]?.title || 
+                           error.response.statusText || 
+                           "RemoveBG API error";
+        throw new Error(`RemoveBG API error: ${errorMessage}`);
+      }
+      throw new Error("Failed to process image with RemoveBG");
+    }
+  }
+
+  /**
+   * Validate if user has enough credits
+   * @param userId User ID
+   * @param creditsNeeded Credits required
+   * @returns True if user has enough credits
+   */
+  async validateUserCredits(userId: string, creditsNeeded: number): Promise<boolean> {
+    const currentCredits = await storage.getUserCredits(userId, REMOVEBG_SERVICE_ID);
+    return currentCredits >= creditsNeeded;
+  }
+
+  /**
+   * Save image to file system
+   * @param buffer Image buffer
+   * @param filename Filename to save as
+   * @param directory Directory to save in
+   * @returns Path to saved file
+   */
+  async saveImage(buffer: Buffer, filename: string, directory: string): Promise<string> {
+    try {
+      const uploadDir = path.join(process.cwd(), "public", "uploads", directory);
+      
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+
+      const filepath = path.join(uploadDir, filename);
+      fs.writeFileSync(filepath, buffer);
+      
+      // Return web-accessible path
+      return `/uploads/${directory}/${filename}`;
+    } catch (error) {
+      console.error("Error saving image:", error);
+      throw new Error("Failed to save image");
+    }
+  }
+
+  /**
+   * Process a complete RemoveBG request
+   * @param userId User ID
+   * @param imageBuffer Original image buffer
+   * @param apiKey RemoveBG API key
+   * @returns Object with processed image path and usage details
+   */
+  async processRemoveBgRequest(
+    userId: string, 
+    imageBuffer: Buffer, 
+    apiKey: string
+  ): Promise<{ 
+    processedImagePath: string; 
+    originalImagePath: string;
+    creditsUsed: number; 
+    resolutionMp: number;
+  }> {
+    // Get image resolution
+    const resolutionMp = await this.getImageResolution(imageBuffer);
+    
+    // Calculate credits needed
+    const creditsNeeded = this.calculateCreditsNeeded(resolutionMp);
+    
+    // Validate user has enough credits
+    const hasCredits = await this.validateUserCredits(userId, creditsNeeded);
+    if (!hasCredits) {
+      const currentCredits = await storage.getUserCredits(userId, REMOVEBG_SERVICE_ID);
+      throw new Error(`Insufficient credits. You have ${currentCredits} credits but need ${creditsNeeded}.`);
+    }
+
+    // Process image with RemoveBG API
+    const processedBuffer = await this.processImage(imageBuffer, apiKey);
+    
+    // Save original and processed images
+    const timestamp = Date.now();
+    const originalFilename = `original_${userId}_${timestamp}.jpg`;
+    const processedFilename = `processed_${userId}_${timestamp}.png`;
+    
+    const originalPath = await this.saveImage(imageBuffer, originalFilename, "removebg/original");
+    const processedPath = await this.saveImage(processedBuffer, processedFilename, "removebg/processed");
+    
+    // Debit credits
+    const debited = await storage.debitUserCredits(userId, REMOVEBG_SERVICE_ID, creditsNeeded);
+    if (!debited) {
+      throw new Error("Failed to debit credits");
+    }
+    
+    // Record usage
+    await storage.createRemoveBgUsage({
+      userId,
+      serviceId: REMOVEBG_SERVICE_ID,
+      creditsUsed: creditsNeeded,
+      resolutionMp: resolutionMp.toString(),
+      imagePath: processedPath,
+      originalImagePath: originalPath,
+    });
+    
+    return {
+      processedImagePath: processedPath,
+      originalImagePath: originalPath,
+      creditsUsed: creditsNeeded,
+      resolutionMp,
+    };
+  }
+
+  /**
+   * Get user's RemoveBG usage history
+   * @param userId User ID
+   * @returns Array of usage records
+   */
+  async getUserUsageHistory(userId: string) {
+    return await storage.getRemoveBgUsageByUserId(userId);
+  }
+
+  /**
+   * Get user's available credits
+   * @param userId User ID
+   * @returns Number of available credits
+   */
+  async getUserCredits(userId: string): Promise<number> {
+    return await storage.getUserCredits(userId, REMOVEBG_SERVICE_ID);
+  }
+
+  /**
+   * Get all RemoveBG plans
+   * @returns Array of plans
+   */
+  async getPlans() {
+    return await storage.getRemoveBgPlans();
+  }
+}
+
+export const removeBgService = new RemoveBgService();

@@ -10,6 +10,7 @@ import { insertUserSchema, insertCredentialSchema, insertPaymentSchema } from "@
 import { manualTriggers } from "./jobs/paymentCron";
 import { sendEmail, emailTemplates } from "./utils/email";
 import { DEFAULT_SERVICE_ID } from "@shared/constants";
+import removeBgRoutes from "./routes/removebg.routes";
 
 // Rate limiters configuration - more lenient in development
 const isProduction = process.env.NODE_ENV === 'production';
@@ -1915,6 +1916,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Erro ao processar webhook" });
     }
   });
+
+  // ========== REMOVEBG ROUTES ==========
+  app.use("/api/removebg", removeBgRoutes);
 
   const httpServer = createServer(app);
   return httpServer;

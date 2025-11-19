@@ -11,12 +11,18 @@ import {
   type InsertPayment,
   type PasswordReset,
   type InsertPasswordReset,
+  type RemoveBgUsage,
+  type InsertRemoveBgUsage,
+  type RemoveBgPlan,
+  type InsertRemoveBgPlan,
   users,
   services,
   userServices,
   credentials,
   payments,
-  passwordResets
+  passwordResets,
+  removeBgUsage,
+  removeBgPlans
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -75,6 +81,16 @@ export interface IStorage {
   getPasswordResetByToken(token: string): Promise<PasswordReset | undefined>;
   deletePasswordReset(id: string): Promise<boolean>;
   deletePasswordResetsByUserId(userId: string): Promise<void>;
+  
+  // RemoveBG
+  getRemoveBgUsageByUserId(userId: string): Promise<RemoveBgUsage[]>;
+  createRemoveBgUsage(usage: InsertRemoveBgUsage): Promise<RemoveBgUsage>;
+  getRemoveBgPlans(): Promise<RemoveBgPlan[]>;
+  getRemoveBgPlan(id: string): Promise<RemoveBgPlan | undefined>;
+  createRemoveBgPlan(plan: InsertRemoveBgPlan): Promise<RemoveBgPlan>;
+  getUserCredits(userId: string, serviceId: string): Promise<number>;
+  updateUserCredits(userId: string, serviceId: string, credits: number): Promise<boolean>;
+  debitUserCredits(userId: string, serviceId: string, creditsToDebit: number): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -84,6 +100,8 @@ export class MemStorage implements IStorage {
   private credentials: Map<string, Credential>;
   private payments: Map<string, Payment>;
   private passwordResets: Map<string, PasswordReset>;
+  private removeBgUsage: Map<string, RemoveBgUsage>;
+  private removeBgPlans: Map<string, RemoveBgPlan>;
 
   constructor() {
     this.users = new Map();
@@ -92,6 +110,8 @@ export class MemStorage implements IStorage {
     this.credentials = new Map();
     this.payments = new Map();
     this.passwordResets = new Map();
+    this.removeBgUsage = new Map();
+    this.removeBgPlans = new Map();
   }
 
   // Users
@@ -402,6 +422,79 @@ export class MemStorage implements IStorage {
     );
     resets.forEach((reset) => this.passwordResets.delete(reset.id));
   }
+
+  // RemoveBG
+  async getRemoveBgUsageByUserId(userId: string): Promise<RemoveBgUsage[]> {
+    return Array.from(this.removeBgUsage.values()).filter(
+      (usage) => usage.userId === userId,
+    );
+  }
+
+  async createRemoveBgUsage(insertUsage: InsertRemoveBgUsage): Promise<RemoveBgUsage> {
+    const id = randomUUID();
+    const usage: RemoveBgUsage = {
+      id,
+      userId: insertUsage.userId,
+      serviceId: insertUsage.serviceId,
+      creditsUsed: insertUsage.creditsUsed,
+      resolutionMp: insertUsage.resolutionMp,
+      imagePath: insertUsage.imagePath ?? null,
+      originalImagePath: insertUsage.originalImagePath ?? null,
+      createdAt: new Date(),
+    };
+    this.removeBgUsage.set(id, usage);
+    return usage;
+  }
+
+  async getRemoveBgPlans(): Promise<RemoveBgPlan[]> {
+    return Array.from(this.removeBgPlans.values());
+  }
+
+  async getRemoveBgPlan(id: string): Promise<RemoveBgPlan | undefined> {
+    return this.removeBgPlans.get(id);
+  }
+
+  async createRemoveBgPlan(insertPlan: InsertRemoveBgPlan): Promise<RemoveBgPlan> {
+    const id = randomUUID();
+    const plan: RemoveBgPlan = {
+      id,
+      name: insertPlan.name,
+      credits: insertPlan.credits,
+      price: insertPlan.price,
+      createdAt: new Date(),
+    };
+    this.removeBgPlans.set(id, plan);
+    return plan;
+  }
+
+  async getUserCredits(userId: string, serviceId: string): Promise<number> {
+    const userService = Array.from(this.userServices.values()).find(
+      (us) => us.userId === userId && us.serviceId === serviceId,
+    );
+    return userService?.creditsAvailable || 0;
+  }
+
+  async updateUserCredits(userId: string, serviceId: string, credits: number): Promise<boolean> {
+    const userService = Array.from(this.userServices.values()).find(
+      (us) => us.userId === userId && us.serviceId === serviceId,
+    );
+    if (!userService) return false;
+    
+    const updatedService = { ...userService, creditsAvailable: credits };
+    this.userServices.set(userService.id, updatedService);
+    return true;
+  }
+
+  async debitUserCredits(userId: string, serviceId: string, creditsToDebit: number): Promise<boolean> {
+    const userService = Array.from(this.userServices.values()).find(
+      (us) => us.userId === userId && us.serviceId === serviceId,
+    );
+    if (!userService || userService.creditsAvailable < creditsToDebit) return false;
+    
+    const updatedService = { ...userService, creditsAvailable: userService.creditsAvailable - creditsToDebit };
+    this.userServices.set(userService.id, updatedService);
+    return true;
+  }
 }
 
 // PostgreSQL storage using Drizzle ORM
@@ -632,6 +725,71 @@ class PostgresStorage implements IStorage {
 
   async deletePasswordResetsByUserId(userId: string): Promise<void> {
     await this.db.delete(passwordResets).where(eq(passwordResets.userId, userId));
+  }
+
+  // RemoveBG
+  async getRemoveBgUsageByUserId(userId: string): Promise<RemoveBgUsage[]> {
+    return await this.db.select().from(removeBgUsage).where(eq(removeBgUsage.userId, userId));
+  }
+
+  async createRemoveBgUsage(insertUsage: InsertRemoveBgUsage): Promise<RemoveBgUsage> {
+    const result = await this.db.insert(removeBgUsage).values(insertUsage).returning();
+    return result[0];
+  }
+
+  async getRemoveBgPlans(): Promise<RemoveBgPlan[]> {
+    return await this.db.select().from(removeBgPlans);
+  }
+
+  async getRemoveBgPlan(id: string): Promise<RemoveBgPlan | undefined> {
+    const result = await this.db.select().from(removeBgPlans).where(eq(removeBgPlans.id, id));
+    return result[0];
+  }
+
+  async createRemoveBgPlan(insertPlan: InsertRemoveBgPlan): Promise<RemoveBgPlan> {
+    const result = await this.db.insert(removeBgPlans).values(insertPlan).returning();
+    return result[0];
+  }
+
+  async getUserCredits(userId: string, serviceId: string): Promise<number> {
+    const result = await this.db.select().from(userServices)
+      .where(and(
+        eq(userServices.userId, userId),
+        eq(userServices.serviceId, serviceId)
+      ));
+    return result[0]?.creditsAvailable || 0;
+  }
+
+  async updateUserCredits(userId: string, serviceId: string, credits: number): Promise<boolean> {
+    const result = await this.db.update(userServices)
+      .set({ creditsAvailable: credits })
+      .where(and(
+        eq(userServices.userId, userId),
+        eq(userServices.serviceId, serviceId)
+      ))
+      .returning();
+    return result.length > 0;
+  }
+
+  async debitUserCredits(userId: string, serviceId: string, creditsToDebit: number): Promise<boolean> {
+    const currentUserService = await this.db.select().from(userServices)
+      .where(and(
+        eq(userServices.userId, userId),
+        eq(userServices.serviceId, serviceId)
+      ));
+    
+    if (!currentUserService[0] || currentUserService[0].creditsAvailable < creditsToDebit) {
+      return false;
+    }
+
+    const result = await this.db.update(userServices)
+      .set({ creditsAvailable: currentUserService[0].creditsAvailable - creditsToDebit })
+      .where(and(
+        eq(userServices.userId, userId),
+        eq(userServices.serviceId, serviceId)
+      ))
+      .returning();
+    return result.length > 0;
   }
 }
 

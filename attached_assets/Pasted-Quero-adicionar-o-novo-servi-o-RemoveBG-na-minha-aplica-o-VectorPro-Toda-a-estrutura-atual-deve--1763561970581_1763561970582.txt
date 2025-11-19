@@ -1,0 +1,108 @@
+Quero adicionar o novo serviço “RemoveBG” na minha aplicação VectorPro.
+Toda a estrutura atual deve continuar funcionando exatamente como está, sem quebrar nenhum fluxo existente.
+O sistema já é multi-serviço, então apenas implemente o módulo RemoveBG seguindo exatamente os requisitos abaixo.
+Você decide a melhor organização interna de pastas, rotas, migrations, serviços, controllers e repositórios, desde que mantenha compatibilidade total com o sistema atual.
+
+Objetivo:
+Adicionar suporte completo ao RemoveBG como um novo serviço com créditos e processamento de imagens, sem alterar o funcionamento atual do Vectorizer.
+
+Requisitos principais
+
+Criar serviço RemoveBG
+Registrar automaticamente em “services” um novo serviço:
+id: removebg-001 (ou o formato que considerar melhor)
+nome: RemoveBG
+descricao: Remoção automática de fundo
+preco: manter campo, mas planos serão por crédito
+ativo: true
+tipo: INDIVIDUAL (pois créditos são por usuário)
+
+Atualizar userServices
+Acrescentar coluna:
+credits_available INTEGER DEFAULT 0
+
+O userServices para o RemoveBG só deve ser criado quando o usuário assinar este serviço.
+
+Criar tabela remove_bg_usage
+Campos:
+id
+userId
+serviceId
+creditsUsed
+resolutionMp
+imagePath
+createdAt
+
+Registrar cada processamento realizado pelo usuário.
+
+Planos de créditos
+Criar estrutura para 3 planos:
+Start: 30 créditos
+Pro: 120 créditos
+Studio: 300 créditos
+
+Os créditos renovam automaticamente todo dia 5 junto com o sistema atual.
+
+O valor em reais pode ficar definido no serviço ou em arquivo de config.
+
+Resolução e custo por crédito
+Até 1MP: 1 crédito
+Até 4MP: 2 créditos
+Até 25MP: 3 créditos
+Sempre escolher o menor custo possível.
+
+Endpoints necessários
+Implementar sem quebrar rotas existentes:
+
+POST /api/removebg/process
+Recebe multipart upload
+Detecta resolução da imagem
+Verifica se usuário tem créditos
+Debita os créditos correspondentes
+Processa na API remove.bg usando a key REMOVE_BG_API_KEY
+Salva imagem processada e registra em remove_bg_usage
+Retorna o arquivo pronto
+
+GET /api/removebg/usage
+Lista histórico de uso do usuário atual
+
+Painel do usuário
+Adicionar card automático no dashboard para o serviço RemoveBG.
+Usar o mesmo estilo do painel atual.
+O card deve exibir:
+créditos disponíveis
+botão enviar imagem
+histórico
+mensagem clara se não tiver créditos
+
+Não alterar nada relacionado ao Vectorizer.
+
+Painel Admin
+Adicionar área RemoveBG no Admin:
+visualizar uso por usuário
+ajustar créditos manualmente
+ver assinaturas removidas
+listar histórico completo
+visualizar total de créditos consumidos
+
+Pagamentos
+Quando usuário assinar RemoveBG, usar a mesma lógica existente de pagamentos:
+serviceId = removebg-001
+Criar/atualizar userService
+Adicionar créditos do plano adquirido
+billing date dia 5
+webhook continua funcionando igual
+não alterar fluxo atual do Vectorizer
+
+API Key
+A integração deve usar a variável:
+REMOVE_BG_API_KEY
+
+Compatibilidade
+Nada no sistema atual deve mudar.
+Nada deve ser removido.
+Nenhuma rota existente deve ser alterada.
+Toda a UI atual deve continuar funcionando.
+Apenas adicionar o módulo RemoveBG de forma modular.
+
+Pode começar a implementação completa com base nesses requisitos.

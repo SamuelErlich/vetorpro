@@ -1,7 +1,11 @@
 import bcrypt from "bcrypt";
 import { storage } from "./storage";
+import { addRemoveBgService } from "./migrations/add-removebg-service";
 
 export async function initializeData() {
+  // Run RemoveBG migration (always run to ensure service exists)
+  await addRemoveBgService();
+
   // Check if admin already exists
   const existingAdmin = await storage.getUserByEmail("admin@example.com");
   

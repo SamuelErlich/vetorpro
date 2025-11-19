@@ -32,6 +32,7 @@ export const userServices = pgTable("user_services", {
   status: text("status").notNull().default("INATIVO"), // ATIVO, INATIVO, BLOQUEADO
   ultimoPagamento: timestamp("ultimo_pagamento"),
   proximoPagamento: timestamp("proximo_pagamento"), // Data do próximo vencimento
+  creditsAvailable: integer("credits_available").default(0), // RemoveBG credits
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -59,6 +60,27 @@ export const passwordResets = pgTable("password_resets", {
   userId: varchar("user_id").notNull().references(() => users.id),
   token: text("token").notNull().unique(),
   expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// RemoveBG usage tracking table
+export const removeBgUsage = pgTable("removebg_usage", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  serviceId: varchar("service_id").notNull().references(() => services.id),
+  creditsUsed: integer("credits_used").notNull(),
+  resolutionMp: decimal("resolution_mp", { precision: 5, scale: 2 }).notNull(),
+  imagePath: text("image_path"),
+  originalImagePath: text("original_image_path"),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// RemoveBG plans table
+export const removeBgPlans = pgTable("removebg_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  credits: integer("credits").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 });
 
@@ -98,6 +120,16 @@ export const insertPasswordResetSchema = createInsertSchema(passwordResets).omit
   createdAt: true,
 });
 
+export const insertRemoveBgUsageSchema = createInsertSchema(removeBgUsage).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertRemoveBgPlanSchema = createInsertSchema(removeBgPlans).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type Service = typeof services.$inferSelect;
@@ -111,3 +143,7 @@ export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 export type Payment = typeof payments.$inferSelect;
 export type InsertPasswordReset = z.infer<typeof insertPasswordResetSchema>;
 export type PasswordReset = typeof passwordResets.$inferSelect;
+export type InsertRemoveBgUsage = z.infer<typeof insertRemoveBgUsageSchema>;
+export type RemoveBgUsage = typeof removeBgUsage.$inferSelect;
+export type InsertRemoveBgPlan = z.infer<typeof insertRemoveBgPlanSchema>;
+export type RemoveBgPlan = typeof removeBgPlans.$inferSelect;
