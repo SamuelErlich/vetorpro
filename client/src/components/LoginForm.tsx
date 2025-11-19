@@ -33,7 +33,15 @@ export default function LoginForm({
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div 
+      className="min-h-screen flex items-center justify-center bg-background p-4"
+      style={{
+        backgroundImage: 'url(/vectorpro-ribbons.svg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }}
+    >
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-3 text-center">
           <div className="flex items-center justify-center gap-2 mb-2">
