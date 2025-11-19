@@ -3,8 +3,7 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { LogOut, User, MessageCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import CredentialsCard from "@/components/CredentialsCard";
-import PaymentButton from "@/components/PaymentButton";
+import VectorizerCard from "@/components/VectorizerCard";
 import PaymentCalendar from "@/components/PaymentCalendar";
 import RemoveBgCard from "@/components/RemoveBgCard";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -54,7 +53,7 @@ export default function ClientDashboard() {
     logoutMutation.mutate();
   };
 
-  const handlePayClick = () => {
+  const handleVectorizerPayClick = () => {
     setLocation('/payment');
   };
 
@@ -86,37 +85,42 @@ export default function ClientDashboard() {
   const payments = paymentsData || [];
   const userServices = userServicesData || [];
 
-  // Find RemoveBG service for current user
+  // Find services for current user
+  const vectorizerService = userServices.find(
+    service => service.serviceId === "vectorizer-001"
+  );
   const removeBgService = userServices.find(
     service => service.serviceId === "removebg-001"
   );
 
-  // Parse credentials data
-  const parsedCredentials = credentials.map((cred: any) => {
-    try {
-      const data = JSON.parse(cred.data);
-      return {
-        id: cred.id,
-        month: cred.month,
-        items: Object.entries(data)
-          .filter(([key]) => {
-            // Remove only ChaveAPI field from display (case-insensitive)
-            const lowerKey = key.toLowerCase();
-            return lowerKey !== 'chaveapi';
-          })
-          .map(([key, value]) => ({
-            label: key.charAt(0).toUpperCase() + key.slice(1),
-            value: String(value),
-          })),
-      };
-    } catch {
-      return {
-        id: cred.id,
-        month: cred.month,
-        items: [{ label: "Dados", value: cred.data }],
-      };
-    }
-  });
+  // Parse credentials data - filter for Vectorizer service only
+  const parsedCredentials = credentials
+    .filter((cred: any) => cred.serviceId === "vectorizer-001")
+    .map((cred: any) => {
+      try {
+        const data = JSON.parse(cred.data);
+        return {
+          id: cred.id,
+          month: cred.month,
+          items: Object.entries(data)
+            .filter(([key]) => {
+              // Remove only ChaveAPI field from display (case-insensitive)
+              const lowerKey = key.toLowerCase();
+              return lowerKey !== 'chaveapi';
+            })
+            .map(([key, value]) => ({
+              label: key.charAt(0).toUpperCase() + key.slice(1),
+              value: String(value),
+            })),
+        };
+      } catch {
+        return {
+          id: cred.id,
+          month: cred.month,
+          items: [{ label: "Dados", value: cred.data }],
+        };
+      }
+    });
 
   // Get only the most recent credential (last in array)
   const currentCreds = parsedCredentials.length > 0 
@@ -163,28 +167,15 @@ export default function ClientDashboard() {
       </header>
 
       <main className="container mx-auto px-4 py-8 space-y-8 max-w-7xl">
-        <PaymentButton
-          status={user?.status === "ATIVO" || user?.status === "INATIVO" || user?.status === "BLOQUEADO" ? user.status : "INATIVO"}
-          onPayClick={handlePayClick}
-        />
-
-        {credentialsLoading ? (
+        {/* Vectorizer Service Card */}
+        {credentialsLoading || servicesLoading ? (
           <Skeleton className="h-64 w-full" />
-        ) : isLocked ? (
-          <CredentialsCard
-            month=""
-            credentials={[]}
-            isLocked={true}
-          />
-        ) : !currentCreds ? (
-          <div className="text-center py-12 text-muted-foreground">
-            Nenhuma credencial disponível
-          </div>
         ) : (
-          <CredentialsCard
-            month={currentCreds.month}
-            credentials={currentCreds.items}
-            isLocked={false}
+          <VectorizerCard
+            userService={vectorizerService || null}
+            credentials={currentCreds?.items || null}
+            onPayClick={handleVectorizerPayClick}
+            isLocked={isLocked}
           />
         )}
 
