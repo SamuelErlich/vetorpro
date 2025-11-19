@@ -1484,9 +1484,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]} - day 5 of next month)`);
         
         res.json({ success: true, message: "Payment processed" });
-      } else if (normalizedStatus === "canceled" || normalizedStatus === "cancelled" || normalizedStatus === "failed") {
-        // Handle both PushinPay's "canceled" (1 L) and potential "cancelled" (2 Ls) variants
-        console.log(`❌ [WEBHOOK] Payment cancellation/failure received for ID: ${receivedTxid}`);
+      } else if (normalizedStatus === "canceled" || normalizedStatus === "cancelled" || normalizedStatus === "failed" || normalizedStatus === "expired") {
+        // Handle canceled, cancelled, failed, and expired statuses
+        console.log(`❌ [WEBHOOK] Payment cancellation/failure/expiration received for ID: ${receivedTxid}`);
         
         // DUAL ID STRATEGY: Try to find payment by txid first, then by pushinpayId
         let payment = await storage.getPaymentByTxid(receivedTxid);

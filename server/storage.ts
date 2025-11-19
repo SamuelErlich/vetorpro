@@ -349,8 +349,10 @@ export class MemStorage implements IStorage {
   }
 
   async getPaymentByTxid(txid: string): Promise<Payment | undefined> {
+    // Case-insensitive comparison for TXID
+    const txidLower = txid.toLowerCase();
     return Array.from(this.payments.values()).find(
-      (payment) => payment.txid === txid,
+      (payment) => payment.txid?.toLowerCase() === txidLower,
     );
   }
 
@@ -596,7 +598,10 @@ class PostgresStorage implements IStorage {
   }
 
   async getPaymentByTxid(txid: string): Promise<Payment | undefined> {
-    const result = await this.db.select().from(payments).where(eq(payments.txid, txid!));
+    // Case-insensitive search for TXID using SQL LOWER() function
+    const result = await this.db.select()
+      .from(payments)
+      .where(sql`LOWER(${payments.txid}) = LOWER(${txid})`);
     return result[0];
   }
 
