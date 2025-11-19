@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, decimal, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, decimal, boolean, integer, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -35,6 +35,11 @@ export const userServices = pgTable("user_services", {
   creditsAvailable: integer("credits_available").default(0), // RemoveBG credits
   planId: varchar("plan_id").references(() => removeBgPlans.id), // RemoveBG plan reference
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+}, (table) => {
+  return {
+    // Unique constraint to prevent duplicate subscriptions
+    userServiceUnique: unique("user_service_unique").on(table.userId, table.serviceId),
+  };
 });
 
 export const credentials = pgTable("credentials", {

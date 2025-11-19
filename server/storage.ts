@@ -64,6 +64,8 @@ export interface IStorage {
   updateUserService(id: string, userService: Partial<UserService>): Promise<UserService | undefined>;
   updateUserServicePlan(userId: string, serviceId: string, planId: string | null, credits: number): Promise<UserService | undefined>;
   getUserServiceWithPlan(userId: string, serviceId: string): Promise<(UserService & { plan?: RemoveBgPlan }) | undefined>;
+  // Upsert operation: creates or updates a user service based on (userId, serviceId) unique pair
+  upsertUserService(userService: InsertUserService): Promise<UserService>;
   
   // Credentials
   getCredential(id: string): Promise<Credential | undefined>;
@@ -376,6 +378,22 @@ export class MemStorage implements IStorage {
     }
 
     return { ...userService, plan };
+  }
+
+  async upsertUserService(insertUserService: InsertUserService): Promise<UserService> {
+    const existing = await this.getUserService(insertUserService.userId, insertUserService.serviceId);
+    
+    if (existing) {
+      // Update existing UserService
+      const updated = await this.updateUserService(existing.id, insertUserService);
+      if (!updated) {
+        throw new Error("Failed to update UserService");
+      }
+      return updated;
+    } else {
+      // Create new UserService
+      return await this.createUserService(insertUserService);
+    }
   }
 
   // Credentials
@@ -894,6 +912,22 @@ class PostgresStorage implements IStorage {
     }
 
     return { ...userService, plan };
+  }
+
+  async upsertUserService(insertUserService: InsertUserService): Promise<UserService> {
+    const existing = await this.getUserService(insertUserService.userId, insertUserService.serviceId);
+    
+    if (existing) {
+      // Update existing UserService
+      const updated = await this.updateUserService(existing.id, insertUserService);
+      if (!updated) {
+        throw new Error("Failed to update UserService");
+      }
+      return updated;
+    } else {
+      // Create new UserService
+      return await this.createUserService(insertUserService);
+    }
   }
 
   // Credentials

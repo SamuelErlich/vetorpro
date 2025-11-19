@@ -2088,29 +2088,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           nextPaymentDate: nextPaymentDate, // Set next vencimento (day 5 of next month)
         });
         
-        // Also update or create UserService for vectorizer-001
+        // Upsert UserService - idempotent operation that handles duplicates gracefully
         const serviceId = payment.serviceId || DEFAULT_SERVICE_ID; // Use payment's serviceId or default
-        const existingUserService = await storage.getUserService(payment.userId, serviceId);
-        
-        if (existingUserService) {
-          // Update existing UserService
-          await storage.updateUserService(existingUserService.id, {
-            status: "ATIVO",
-            ultimoPagamento: new Date(),
-            proximoPagamento: nextPaymentDate,
-          });
-          console.log(`UserService ${existingUserService.id} updated for service ${serviceId}`);
-        } else {
-          // Create new UserService
-          await storage.createUserService({
-            userId: payment.userId,
-            serviceId: serviceId,
-            status: "ATIVO",
-            ultimoPagamento: new Date(),
-            proximoPagamento: nextPaymentDate,
-          });
-          console.log(`UserService created for user ${payment.userId} and service ${serviceId}`);
-        }
+        const userService = await storage.upsertUserService({
+          userId: payment.userId,
+          serviceId: serviceId,
+          status: "ATIVO",
+          ultimoPagamento: new Date(),
+          proximoPagamento: nextPaymentDate,
+        });
+        console.log(`UserService ${userService.id} upserted for user ${payment.userId} and service ${serviceId}`);
         
         console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]} - day 5 of next month)`);
         
