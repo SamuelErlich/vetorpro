@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Label } from "@/components/ui/label";
-import { ChevronDown, ChevronRight, Search, UserPlus, Edit, Settings, CreditCard, Calendar, Package, Filter, X } from "lucide-react";
+import { ChevronDown, ChevronRight, ChevronUp, Search, UserPlus, Edit, Settings, CreditCard, Calendar, Package, Filter, X } from "lucide-react";
 import CreateUserDialog from "@/components/CreateUserDialog";
 import type { User, UserService, Service } from "@shared/schema";
 
@@ -266,11 +266,15 @@ export default function AdminUsers() {
                           variant="ghost"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setLocation(`/admin/user/${user.id}`);
+                            toggleRowExpansion(user.id);
                           }}
-                          data-testid={`button-edit-${user.id}`}
+                          data-testid={`button-expand-${user.id}`}
                         >
-                          <Edit className="h-4 w-4" />
+                          {expandedRows.has(user.id) ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
                         </Button>
                       </TableCell>
                     </TableRow>
