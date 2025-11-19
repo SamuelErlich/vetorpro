@@ -588,15 +588,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "Usuário não encontrado" });
       }
       
-      // Return credentials only if user status is ATIVO
-      if (user.status !== "ATIVO") {
+      // Get user's active subscriptions to services
+      const userServices = await storage.getUserServices(req.session.userId!);
+      const activeServices = userServices.filter(us => us.status === "ATIVO");
+      
+      // If no active services, return locked
+      if (activeServices.length === 0) {
         return res.json({ locked: true, credentials: [] });
       }
 
-      // Get shared credentials (userId is null) - available to all active users
-      const credentials = await storage.getSharedCredentials();
+      // Get credentials for each active service
+      let allCredentials: any[] = [];
+      for (const userService of activeServices) {
+        const serviceCredentials = await storage.getSharedCredentials(userService.serviceId);
+        allCredentials = allCredentials.concat(serviceCredentials);
+      }
 
-      res.json({ locked: false, credentials });
+      // Remove duplicates (if any credential belongs to multiple services)
+      const uniqueCredentials = Array.from(new Map(allCredentials.map(c => [c.id, c])).values());
+
+      res.json({ locked: false, credentials: uniqueCredentials });
     } catch (error) {
       console.error("Get credentials error:", error);
       res.status(500).json({ error: "Erro ao buscar credenciais" });

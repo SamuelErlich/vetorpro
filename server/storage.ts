@@ -60,7 +60,8 @@ export interface IStorage {
   // Credentials
   getCredential(id: string): Promise<Credential | undefined>;
   getCredentialsByUserId(userId: string): Promise<Credential[]>;
-  getSharedCredentials(): Promise<Credential[]>;
+  getSharedCredentials(serviceId?: string): Promise<Credential[]>;
+  getCredentialsByServiceId(serviceId: string): Promise<Credential[]>;
   getAllCredentials(): Promise<Credential[]>;
   createCredential(credential: InsertCredential): Promise<Credential>;
   updateCredential(id: string, credential: Partial<Credential>): Promise<Credential | undefined>;
@@ -289,9 +290,19 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async getSharedCredentials(): Promise<Credential[]> {
+  async getSharedCredentials(serviceId?: string): Promise<Credential[]> {
     return Array.from(this.credentials.values()).filter(
-      (cred) => cred.userId === null || cred.userId === undefined,
+      (cred) => {
+        const isShared = cred.userId === null || cred.userId === undefined;
+        if (!serviceId) return isShared;
+        return isShared && (cred.serviceId === serviceId || cred.serviceId === null);
+      }
+    );
+  }
+
+  async getCredentialsByServiceId(serviceId: string): Promise<Credential[]> {
+    return Array.from(this.credentials.values()).filter(
+      (cred) => cred.serviceId === serviceId || (cred.serviceId === null && serviceId === "vectorizer-001"),
     );
   }
 
@@ -644,8 +655,33 @@ class PostgresStorage implements IStorage {
     return await this.db.select().from(credentials).where(eq(credentials.userId, userId));
   }
 
-  async getSharedCredentials(): Promise<Credential[]> {
+  async getSharedCredentials(serviceId?: string): Promise<Credential[]> {
+    // If serviceId provided, filter by that service. Otherwise return all shared credentials.
+    // Also consider null serviceId as vectorizer-001 for backward compatibility
+    if (serviceId) {
+      return await this.db.select().from(credentials).where(
+        and(
+          isNull(credentials.userId),
+          or(
+            eq(credentials.serviceId, serviceId),
+            // For backward compatibility, null serviceId means vectorizer-001
+            and(isNull(credentials.serviceId), eq(sql`${serviceId}`, 'vectorizer-001'))
+          )
+        )
+      );
+    }
     return await this.db.select().from(credentials).where(isNull(credentials.userId));
+  }
+
+  async getCredentialsByServiceId(serviceId: string): Promise<Credential[]> {
+    // Get all credentials for a specific service
+    // For backward compatibility, null serviceId is treated as vectorizer-001
+    return await this.db.select().from(credentials).where(
+      or(
+        eq(credentials.serviceId, serviceId),
+        and(isNull(credentials.serviceId), eq(sql`${serviceId}`, 'vectorizer-001'))
+      )
+    );
   }
 
   async getAllCredentials(): Promise<Credential[]> {
