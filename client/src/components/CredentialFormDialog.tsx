@@ -9,14 +9,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 interface User {
   id: string;
@@ -46,21 +38,54 @@ export default function CredentialFormDialog({
   credential 
 }: CredentialFormDialogProps) {
   const [month, setMonth] = useState(credential?.month || "");
-  const [data, setData] = useState(credential?.data || "");
+  const [usuario, setUsuario] = useState("");
+  const [senha, setSenha] = useState("");
+  const [chaveAPI, setChaveAPI] = useState("");
+  const [originalData, setOriginalData] = useState<any>({});
 
   useEffect(() => {
     if (credential) {
       setMonth(credential.month);
-      setData(credential.data);
+      
+      // Parse JSON para popular os campos individuais
+      try {
+        const parsed = JSON.parse(credential.data);
+        setOriginalData(parsed); // Guardar JSON original para preservar outros campos
+        setUsuario(parsed.usuario || "");
+        setSenha(parsed.senha || "");
+        setChaveAPI(parsed.chaveAPI || "");
+      } catch (e) {
+        // Se JSON inválido, limpar campos
+        setOriginalData({});
+        setUsuario("");
+        setSenha("");
+        setChaveAPI("");
+      }
     } else {
       setMonth("");
-      setData("");
+      setOriginalData({});
+      setUsuario("");
+      setSenha("");
+      setChaveAPI("");
     }
   }, [credential, open]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit({ userId: null, month, data });
+    
+    // Fazer merge: preservar campos originais + atualizar os 3 campos editáveis
+    const mergedData = {
+      ...originalData, // Preservar campos que já existiam
+    };
+    
+    // Adicionar campos apenas se não estiverem vazios
+    if (usuario.trim()) mergedData.usuario = usuario.trim();
+    if (senha.trim()) mergedData.senha = senha.trim();
+    if (chaveAPI.trim()) mergedData.chaveAPI = chaveAPI.trim();
+    
+    const jsonData = JSON.stringify(mergedData);
+    
+    onSubmit({ userId: null, month, data: jsonData });
     onClose();
   };
 
@@ -92,20 +117,37 @@ export default function CredentialFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="data">Dados da Credencial (JSON)</Label>
-            <Textarea
-              id="data"
-              value={data}
-              onChange={(e) => setData(e.target.value)}
-              placeholder='{"usuario": "user@example.com", "senha": "senha123", "chave": "abc123"}'
-              rows={6}
-              required
-              className="font-mono text-sm"
-              data-testid="input-credential-data"
+            <Label htmlFor="usuario">Usuário</Label>
+            <Input
+              id="usuario"
+              value={usuario}
+              onChange={(e) => setUsuario(e.target.value)}
+              placeholder="Ex: vectorizer@service.com"
+              data-testid="input-credential-usuario"
             />
-            <p className="text-xs text-muted-foreground">
-              Use formato JSON para armazenar múltiplos dados
-            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="senha">Senha</Label>
+            <Input
+              id="senha"
+              type="text"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              placeholder="Ex: Vectorizer@2025"
+              data-testid="input-credential-senha"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="chaveAPI">Chave API</Label>
+            <Input
+              id="chaveAPI"
+              value={chaveAPI}
+              onChange={(e) => setChaveAPI(e.target.value)}
+              placeholder="Ex: vk_live_abc123xyz789"
+              data-testid="input-credential-chaveapi"
+            />
           </div>
 
           <div className="flex justify-end gap-3 pt-4">
