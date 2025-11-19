@@ -20,7 +20,19 @@ The backend is an **Express.js** application with **TypeScript** running on **No
 
 ### Data Storage
 
-**PostgreSQL** via `@neondatabase/serverless` is the primary database, managed by **Drizzle ORM**. The schema includes `Users` (id, email, password, status, ultimoPagamento, isAdmin), `Credentials` (id, userId, month, data - JSON with `ChaveAPI` filtered from client view), and `Payments` (id, userId, amount, status, txid, createdAt). Drizzle Kit is used for schema migrations.
+**PostgreSQL** via `@neondatabase/serverless` is the primary database, managed by **Drizzle ORM**. The schema includes:
+
+**Core Tables:**
+- `Users` (id, email, password, status, ultimoPagamento, isAdmin) - Legacy user table, maintained for backward compatibility
+- `Services` (id, name, description, isActive, monthlyPrice) - Service definitions (e.g., Vectorizer)
+- `UserServices` (id, userId, serviceId, status, nextPaymentDate) - Per-service subscription management
+- `Credentials` (id, userId, **serviceId**, month, data) - Service credentials (JSON with `ChaveAPI` filtered from client view)
+- `Payments` (id, userId, **serviceId**, amount, status, txid, createdAt) - Payment tracking per service
+
+**Multi-Service Architecture (November 2025):**
+The system now supports multiple services internally while maintaining **zero visual impact** on the existing UI. All operations use `DEFAULT_SERVICE_ID` constant (currently "vectorizer-001") from `shared/constants.ts`. The `UserServices` table manages per-service subscriptions, while the legacy `Users` table is maintained for backward compatibility. When adding new services in the future, simply create a new service record and the infrastructure is ready - no migration of existing users required.
+
+Drizzle Kit is used for schema migrations.
 
 ### Authorization
 
@@ -48,7 +60,13 @@ The system supports **two methods** for user onboarding:
 
 ### Payment Integration
 
-The system supports a **monthly subscription of R$ 17,50**. It integrates with the **PushinPay API** for PIX payment generation. The flow involves client initiation, backend generation of a unique TXID, API call to PushinPay, storage of payment in cents, and return of QR code data. A demo mode fallback is available for testing. Webhook handling is security-hardened with X-Token validation, TXID validation, and idempotency checks. Successful payments update user status to "ATIVO" and set `ultimoPagamento`.
+The system supports a **monthly subscription of R$ 17,50** (defined in `shared/constants.ts`). It integrates with the **PushinPay API** for PIX payment generation. The flow involves client initiation, backend generation of a unique TXID, API call to PushinPay, storage of payment in cents with `serviceId`, and return of QR code data. A demo mode fallback is available for testing.
+
+**Webhook Processing:**
+- Security-hardened with X-Token validation, TXID validation, and idempotency checks
+- Updates **both** `Users.status` (backward compatibility) and `UserServices.status` (multi-service support)
+- Sets `Users.ultimoPagamento` and `UserServices.nextPaymentDate` to day 5 of following month
+- All payments automatically tagged with `serviceId` (defaults to "vectorizer-001")
 
 ### Email Notification System
 
@@ -57,9 +75,12 @@ The system supports a **monthly subscription of R$ 17,50**. It integrates with t
 **Standardized Billing Cycle:** All payments are due on **DAY 5 of each month**. When a user pays, their `nextPaymentDate` is automatically set to day 5 of the following month (not +30 days from payment). This creates a consistent, predictable billing cycle for all customers.
 
 **Cron Schedule** (America/Sao_Paulo timezone):
-- **Day 3 at 9:00 AM**: Pre-reminder emails ("Payment due in 2 days")
-- **Day 4 at 9:00 AM**: Final warning emails ("Payment due tomorrow - day 5")
-- **Day 6 at 9:00 AM**: Block overdue users + send "Access blocked" emails (1 day grace period)
+- **Day 3 at 9:00 AM**: Pre-reminder emails ("Payment due in 2 days") - Queries `UserServices` table
+- **Day 4 at 9:00 AM**: Final warning emails ("Payment due tomorrow - day 5") - Queries `UserServices` table
+- **Day 6 at 9:00 AM**: Block overdue users + send "Access blocked" emails (1 day grace period) - Updates both `Users` and `UserServices` tables
+
+**Multi-Service Cron Support:**
+Cron jobs now operate on the `UserServices` table filtered by `DEFAULT_SERVICE_ID`, allowing independent billing cycles for future services. Legacy `Users` table is updated in parallel for backward compatibility.
 
 Admin testing endpoints are available:
 - `POST /api/admin/test-email` - Manual email testing
