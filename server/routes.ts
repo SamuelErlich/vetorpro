@@ -2310,6 +2310,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update payment status
         await storage.updatePayment(payment.id, { status: "paid" });
         
+        // Cancel all other pending payments for the same user and service
+        const serviceId = payment.serviceId || DEFAULT_SERVICE_ID;
+        await storage.cancelPendingPayments(payment.userId, serviceId, receivedTxid);
+        console.log(`🚫 [WEBHOOK] Cancelled all other pending payments for user ${payment.userId} and service ${serviceId}`);
+        
         // Calculate next payment date: Always day 5 of next month
         const nextPaymentDate = new Date();
         nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1); // Next month
