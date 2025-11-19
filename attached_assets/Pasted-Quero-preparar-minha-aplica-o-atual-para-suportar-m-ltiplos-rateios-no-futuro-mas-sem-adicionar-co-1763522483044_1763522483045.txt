@@ -1,0 +1,132 @@
+Quero preparar minha aplicação atual para suportar múltiplos rateios no futuro, mas sem adicionar complexidade visual ou estrutural agora. A ideia é manter TUDO funcionando exatamente como está, sem alterar o fluxo atual do usuário, sem mudar telas e sem transformar o projeto em algo pesado. Apenas preparar a base para expansão futura.
+
+A aplicação atual funciona com apenas 1 serviço (Vectorizer). Por enquanto, tudo deve continuar assim. Não implemente telas novas e não implemente múltiplos serviços na UI ainda.
+
+Implemente apenas as estruturas essenciais no backend e banco de dados para uma futura expansão leve e organizada.
+
+O que deve ser implementado AGORA (leve):
+1. Criar tabela Services
+
+Criar tabela mínima com os campos:
+id
+nome
+descricao
+preco
+ativo (boolean)
+
+Inserir automaticamente 1 registro padrão:
+id = 1
+nome = "Vectorizer"
+preco = 17.50
+ativo = true
+
+2. Criar tabela UserServices
+
+Essa tabela representa a assinatura de um usuário a um serviço.
+Por enquanto, cada usuário terá apenas 1 entrada relacionada ao serviço Vectorizer.
+
+Campos:
+id
+userId
+serviceId
+status (ATIVO, INATIVO, BLOQUEADO)
+ultimoPagamento
+proximoPagamento
+dataCriacao
+
+Preencher automaticamente:
+Quando usuário pagar, atualizar ou criar o registro correspondente ao serviço 1.
+
+3. Ajustar pagamentos para incluir serviceId
+
+Todos os pagamentos devem agora incluir o campo serviceId.
+Por padrão:
+serviceId = 1 (Vectorizer)
+
+Ao confirmar pagamento:
+
+atualizar UserServices apenas do serviceId correspondente
+
+NÃO alterar status do usuário no modelo antigo (por compatibilidade)
+
+manter o fluxo atual funcionando
+
+4. Ajustar credenciais para incluir serviceId
+
+Acrescentar coluna serviceId na tabela de credenciais.
+Por enquanto, todas permanecem com serviceId = 1.
+
+O comportamento para o usuário final deve continuar igual.
+
+5. Manter toda a UI exatamente como está
+
+Nada deve mudar nas telas:
+login
+criar senha
+painel usuário
+criar pagamento
+ver credenciais
+painel admin
+
+Nada deve quebrar.
+Nada deve aparecer de novo.
+Nenhum botão novo.
+Nenhum fluxo novo.
+
+6. Atualizar backend para usar serviceId sem alterar UI
+
+Ajustar as rotas para:
+
+armazenar serviceId nos pagamentos
+
+armazenar serviceId nas credenciais
+
+atualizar assinatura apenas no UserServices
+
+manter compatibilidade com a lógica atual que usa status ATIVO/INATIVO
+
+Continue retornando os dados no mesmo formato atual para não quebrar o frontend.
+
+7. Cron jobs
+
+Por enquanto, cron só gerencia serviceId = 1.
+Mas já prepare a função para aceitar serviceId no futuro.
+
+8. Zero impacto na lógica atual
+
+Usuário continua vendo:
+
+status atual
+
+credenciais atuais
+
+pagamentos atuais
+
+Painel Admin continua exatamente igual.
+
+Importante
+
+O objetivo somente é:
+
+preparar o banco
+
+preparar backend
+
+adicionar serviceId nas entidades
+
+manter todo o comportamento atual sem nenhuma mudança visual
+
+Sem UI de múltiplos serviços agora.
+Sem escolher serviços no painel.
+Sem novos fluxos.
+
+Implemente tudo da forma mais limpa, organizada e segura possível.
+Replit pode decidir nomes de campos, migrations e organização interna desde que:
+
+mantenha compatibilidade total
+
+mantenha o sistema funcionando como está
+
+mantenha painéis sem mudanças
+
+Pode começar.
