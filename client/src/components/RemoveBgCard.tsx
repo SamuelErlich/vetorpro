@@ -76,7 +76,7 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
   if (!userService) {
     // User doesn't have RemoveBG service - show subscription prompt
     return (
-      <Card>
+      <Card className="promotional-border">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl">RemoveBG - Remover Fundo</CardTitle>
@@ -106,7 +106,7 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
   if (!isActive) {
     // User has service but it's INATIVO - show subscribe or pending payment
     return (
-      <Card>
+      <Card className="promotional-border">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl">RemoveBG - Remover Fundo</CardTitle>
@@ -181,7 +181,7 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
   // Active service - show full UI
   return (
     <>
-      <Card>
+      <Card className="promotional-border">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-xl">RemoveBG - Remover Fundo</CardTitle>

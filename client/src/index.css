@@ -94,6 +94,51 @@
   --destructive-border: hsl(from hsl(var(--destructive)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 }
 
+/* Campaign promotional border animation */
+@keyframes gradient-border {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Promotional border using border-image for better compatibility */
+.promotional-border {
+  position: relative !important;
+  border: 2px solid transparent !important;
+  background: linear-gradient(hsl(var(--card)), hsl(var(--card))) padding-box,
+              linear-gradient(120deg, 
+                hsl(218 95% 54%) 0%, 
+                hsl(280 85% 65%) 25%, 
+                hsl(218 95% 54%) 50%, 
+                hsl(280 85% 65%) 75%, 
+                hsl(218 95% 54%) 100%) border-box !important;
+  background-size: 100% 100%, 400% 400% !important;
+  background-position: 0 0, 0% 50% !important;
+  animation: gradient-border 4s ease infinite !important;
+}
+
+.dark .promotional-border {
+  background: linear-gradient(hsl(var(--card)), hsl(var(--card))) padding-box,
+              linear-gradient(120deg, 
+                hsl(218 95% 60%) 0%, 
+                hsl(280 85% 65%) 25%, 
+                hsl(218 95% 60%) 50%, 
+                hsl(280 85% 65%) 75%, 
+                hsl(218 95% 60%) 100%) border-box !important;
+  background-size: 100% 100%, 400% 400% !important;
+}
+
+/* Shimmer effect on hover */
+.promotional-border:hover {
+  animation-duration: 2s !important;
+}
+
 .dark {
   --button-outline: rgba(255,255,255, .10);
   --badge-outline: rgba(255,255,255, .05);
