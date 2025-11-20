@@ -12,7 +12,7 @@ import PaymentHistoryDrawer from "@/components/PaymentHistoryDrawer";
 import AdminRemoveBgPanel from "@/components/AdminRemoveBgPanel";
 import AdminRemoveBgUsage from "@/components/AdminRemoveBgUsage";
 import AdminRemoveBgStats from "@/components/AdminRemoveBgStats";
-import AdminServiceManagement from "./AdminServiceManagement";
+import AdminServiceManagementV2 from "./AdminServiceManagementV2";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import UserFormDialog from "@/components/UserFormDialog";
 import { Button } from "@/components/ui/button";
@@ -577,7 +577,7 @@ export default function AdminDashboard() {
               )}
 
               {activeTab === "marketplace" && (
-                <AdminServiceManagement />
+                <AdminServiceManagementV2 />
               )}
 
               {activeTab === "services" && (
