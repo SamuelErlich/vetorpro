@@ -2837,6 +2837,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== REMOVEBG ROUTES ==========
   app.use("/api/removebg", removeBgRoutes);
+
+  // ========== MARKETPLACE ROUTES ==========
+  // Get all active services for marketplace
+  app.get("/api/marketplace/services", async (req, res) => {
+    try {
+      const services = await storage.getActiveServices();
+      
+      // Transform service data for marketplace display
+      const marketplaceServices = services.map(service => {
+        // Define categories based on service ID
+        let category = "Geral";
+        let features = [];
+        let isPopular = false;
+        let isHighlight = false;
+        
+        if (service.id === "vectorizer-001") {
+          category = "Produtividade";
+          features = [
+            "Vetorização ilimitada",
+            "Alta qualidade",
+            "Suporte API",
+            "Processamento em lote"
+          ];
+          isPopular = true;
+        } else if (service.id === "removebg-001") {
+          category = "Imagens";
+          features = [
+            "Precisão com IA",
+            "HD e 4K",
+            "PNG transparente",
+            "Processamento rápido"
+          ];
+          isHighlight = true;
+        }
+        
+        return {
+          id: service.id,
+          nome: service.nome,
+          descricao: service.descricao,
+          preco: service.preco,
+          ativo: service.ativo,
+          category,
+          features,
+          isPopular,
+          isHighlight
+        };
+      });
+      
+      res.json(marketplaceServices);
+    } catch (error) {
+      console.error("Error fetching marketplace services:", error);
+      res.status(500).json({ error: "Erro ao buscar serviços" });
+    }
+  });
+
+  // Get service categories
+  app.get("/api/marketplace/categories", async (req, res) => {
+    try {
+      const services = await storage.getActiveServices();
+      
+      // Define categories with service mapping
+      const categoryMap = new Map();
+      services.forEach(service => {
+        let category = "Geral";
+        if (service.id === "vectorizer-001") {
+          category = "Produtividade";
+        } else if (service.id === "removebg-001") {
+          category = "Imagens";
+        }
+        categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
+      });
+      
+      const categories = [
+        { name: "Todos", count: services.length },
+        ...Array.from(categoryMap.entries()).map(([name, count]) => ({
+          name,
+          count
+        }))
+      ];
+      
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ error: "Erro ao buscar categorias" });
+    }
+  });
+
+  // Get service details by ID
+  app.get("/api/marketplace/services/:id", async (req, res) => {
+    try {
+      const service = await storage.getService(req.params.id);
+      
+      if (!service) {
+        return res.status(404).json({ error: "Serviço não encontrado" });
+      }
+      
+      res.json(service);
+    } catch (error) {
+      console.error("Error fetching service details:", error);
+      res.status(500).json({ error: "Erro ao buscar detalhes do serviço" });
+    }
+  });
+
+  // Subscribe to a service (requires auth)
+  app.post("/api/marketplace/subscribe", requireAuth, async (req, res) => {
+    try {
+      const { serviceId } = req.body;
+      const userId = req.session.userId;
+      
+      if (!serviceId) {
+        return res.status(400).json({ error: "ID do serviço é obrigatório" });
+      }
+      
+      // Check if user already has this service
+      const existingSubscription = await storage.getUserService(userId!, serviceId);
+      if (existingSubscription) {
+        return res.status(400).json({ 
+          error: "Você já possui este serviço",
+          redirect: "/payment" 
+        });
+      }
+      
+      // Get service details
+      const service = await storage.getService(serviceId);
+      if (!service || !service.ativo) {
+        return res.status(404).json({ error: "Serviço não encontrado ou inativo" });
+      }
+      
+      // Create inactive subscription (will be activated after payment)
+      await storage.createUserService({
+        userId: userId!,
+        serviceId,
+        status: "INATIVO",
+        proximoPagamento: null
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Serviço adicionado! Efetue o pagamento para ativar.",
+        redirect: "/payment"
+      });
+    } catch (error) {
+      console.error("Error subscribing to service:", error);
+      res.status(500).json({ error: "Erro ao adicionar serviço" });
+    }
+  });
   
   // RemoveBG API Token Management Routes (Admin only)
   app.get("/api/admin/removebg-tokens", requireAdmin, async (req, res) => {
