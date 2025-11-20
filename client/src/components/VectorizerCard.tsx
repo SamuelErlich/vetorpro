@@ -7,12 +7,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Monitor, CreditCard, Copy, ExternalLink } from "lucide-react";
-import type { UserService } from "@shared/schema";
+import { Monitor, CreditCard, Copy, ExternalLink, Clock } from "lucide-react";
+import type { UserService, Payment } from "@shared/schema";
 import { MONTHLY_PAYMENT_AMOUNT } from "@shared/constants";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 
 interface VectorizerCardProps {
   userService: UserService | null;
@@ -23,13 +25,35 @@ interface VectorizerCardProps {
 
 export default function VectorizerCard({ userService, credentials, onPayClick, isLocked }: VectorizerCardProps) {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   
-  // For backward compatibility, also check if userService is null (legacy users)
-  // If no userService exists, fall back to checking if credentials exist
-  const isActive = userService?.status === "ATIVO" || (!userService && credentials && credentials.length > 0);
+  // Query for pending payments for this specific service
+  const { data: paymentsData } = useQuery<Payment[]>({
+    queryKey: ['/api/payments'],
+    enabled: !!userService,
+  });
+  
+  // Find pending payment for Vectorizer service
+  const pendingPayment = paymentsData?.find(
+    payment => payment.serviceId === "vectorizer-001" && payment.status === "pending"
+  );
+  
+  // Access control based on UserServices.status
+  // ATIVO: Show credentials and access button
+  // INATIVO: Show subscribe button (and pending payment if exists)
+  const isActive = userService?.status === "ATIVO";
   const price = MONTHLY_PAYMENT_AMOUNT.toFixed(2).replace('.', ',');
+  
+  const handlePayNow = () => {
+    if (pendingPayment) {
+      // Navigate to payment page with the pending payment
+      setLocation(`/payment?txid=${pendingPayment.txid}`);
+    } else {
+      onPayClick();
+    }
+  };
 
   const handleCopy = (value: string, label: string) => {
     navigator.clipboard.writeText(value);
@@ -97,17 +121,36 @@ export default function VectorizerCard({ userService, credentials, onPayClick, i
           <div className="flex items-center gap-2">
             <CreditCard className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">Valor:</span>
-            <span className="font-semibold text-primary">R$ {price}</span>
+            <span className="font-semibold text-primary">R$ {price}/mês</span>
           </div>
           
-          {!isActive && (
+          {/* Show subscribe button only when service is INATIVO */}
+          {!isActive && !pendingPayment && (
             <Button 
               onClick={onPayClick}
-              data-testid="button-pay-vectorizer"
+              data-testid="button-subscribe-vectorizer"
             >
               <CreditCard className="h-4 w-4 mr-2" />
-              Pagar Assinatura
+              Assinar
             </Button>
+          )}
+          
+          {/* Show pending payment button when there's a pending payment */}
+          {!isActive && pendingPayment && (
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">
+                <Clock className="h-3 w-3 mr-1" />
+                Pagamento Pendente
+              </Badge>
+              <Button 
+                onClick={handlePayNow}
+                size="sm"
+                variant="default"
+                data-testid="button-pay-pending-vectorizer"
+              >
+                Pagar agora
+              </Button>
+            </div>
           )}
         </div>
 
