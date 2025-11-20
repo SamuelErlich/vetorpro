@@ -871,8 +871,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== CREDENTIAL ROUTES ==========
   
-  // Get user's credentials (only if payment is active)
-  app.get("/api/credentials", requireActiveAuth, async (req, res) => {
+  // Get user's credentials (controlled by UserServices.status, not user.status)
+  app.get("/api/credentials", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const user = await storage.getUser(userId);
