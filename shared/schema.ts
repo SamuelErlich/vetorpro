@@ -33,7 +33,11 @@ export const userServices = pgTable("user_services", {
   ultimoPagamento: timestamp("ultimo_pagamento"),
   proximoPagamento: timestamp("proximo_pagamento"), // Data do próximo vencimento
   creditsAvailable: integer("credits_available").default(0), // RemoveBG credits
-  planId: varchar("plan_id").references(() => removeBgPlans.id), // RemoveBG plan reference
+  planId: varchar("plan_id").references(() => servicePlans.id), // Service plan reference
+  credits: integer("credits").default(0), // Total credits available
+  creditsUsed: integer("credits_used").default(0), // Credits consumed
+  lastPaymentDate: timestamp("last_payment_date"), // Last successful payment
+  trialEndsAt: timestamp("trial_ends_at"), // Trial expiration date
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
 }, (table) => {
   return {
@@ -54,6 +58,7 @@ export const payments = pgTable("payments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   serviceId: varchar("service_id").notNull().references(() => services.id), // Service ID obrigatório para rastreamento de pagamentos por serviço
+  planId: varchar("plan_id").references(() => servicePlans.id), // Service plan reference (optional)
   amount: decimal("amount", { precision: 10, scale: 0 }).notNull(), // Amount in cents as decimal string (e.g., "1750")
   status: text("status").notNull().default("pending"),
   txid: text("txid"),

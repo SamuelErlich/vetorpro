@@ -66,6 +66,7 @@ export interface IStorage {
   getUserService(userId: string, serviceId: string): Promise<UserService | undefined>;
   getUserServices(userId: string): Promise<UserService[]>;
   getUserServicesByServiceId(serviceId: string): Promise<UserService[]>;
+  getUserServicesWithDetails(userId: string): Promise<UserService[]>;
   createUserService(userService: InsertUserService): Promise<UserService>;
   updateUserService(id: string, userService: Partial<UserService>): Promise<UserService | undefined>;
   updateUserServicePlan(userId: string, serviceId: string, planId: string | null, credits: number): Promise<UserService | undefined>;
@@ -93,6 +94,7 @@ export interface IStorage {
   deletePayment(id: string): Promise<boolean>;
   getPaymentByTxid(txid: string): Promise<Payment | undefined>;
   getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined>;
+  markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId: string): Promise<void>;
   
   // Password Resets
   createPasswordReset(reset: InsertPasswordReset): Promise<PasswordReset>;
@@ -412,6 +414,12 @@ export class MemStorage implements IStorage {
     );
   }
 
+  async getUserServicesWithDetails(userId: string): Promise<UserService[]> {
+    return Array.from(this.userServices.values()).filter(
+      (us) => us.userId === userId,
+    );
+  }
+
   async createUserService(insertUserService: InsertUserService): Promise<UserService> {
     const id = randomUUID();
     const userService: UserService = {
@@ -621,6 +629,18 @@ export class MemStorage implements IStorage {
                payment.pushinpayId.toUpperCase() === pushinpayIdUpper;
       }
     );
+  }
+
+  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId: string): Promise<void> {
+    // Mark all pending payments for this user and service as expired, except the excludeId
+    Array.from(this.payments.values()).forEach(payment => {
+      if (payment.userId === userId && 
+          payment.serviceId === serviceId && 
+          payment.id !== excludeId && 
+          payment.status === "pending") {
+        payment.status = "expired";
+      }
+    });
   }
 
   // Password Resets
@@ -1184,6 +1204,10 @@ class PostgresStorage implements IStorage {
     return await this.db.select().from(userServices).where(eq(userServices.serviceId, serviceId));
   }
 
+  async getUserServicesWithDetails(userId: string): Promise<UserService[]> {
+    return await this.db.select().from(userServices).where(eq(userServices.userId, userId));
+  }
+
   async createUserService(insertUserService: InsertUserService): Promise<UserService> {
     const result = await this.db.insert(userServices).values(insertUserService).returning();
     return result[0];
@@ -1447,6 +1471,18 @@ class PostgresStorage implements IStorage {
       .from(payments)
       .where(sql`LOWER(${payments.pushinpayId}) = LOWER(${pushinpayId})`);
     return result[0];
+  }
+
+  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId: string): Promise<void> {
+    // Mark all pending payments for this user and service as expired, except the excludeId
+    await this.db.update(payments)
+      .set({ status: "expired" })
+      .where(and(
+        eq(payments.userId, userId),
+        eq(payments.serviceId, serviceId),
+        eq(payments.status, "pending"),
+        sql`${payments.id} != ${excludeId}`
+      ));
   }
 
   // Password Resets

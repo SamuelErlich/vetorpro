@@ -869,8 +869,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/user-services", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
-      const userServices = await storage.getUserServices(userId);
-      res.json(userServices);
+      const userServices = await storage.getUserServicesWithDetails(userId);
+      
+      // Enrich services with plan and service information
+      const enrichedServices = await Promise.all(
+        userServices.map(async (us) => {
+          const service = await storage.getService(us.serviceId);
+          const plan = us.planId ? await storage.getServicePlan(us.planId) : null;
+          
+          // Calculate remaining credits for services with credit system
+          const remainingCredits = us.credits ? 
+            (us.credits - (us.creditsUsed || 0)) : 
+            (us.creditsAvailable || 0);
+          
+          return {
+            ...us,
+            serviceName: service?.nome,
+            serviceDescription: service?.descricao,
+            planId: us.planId,
+            planName: plan?.name,
+            planFeatures: plan?.features,
+            remainingCredits: remainingCredits,
+            totalCredits: us.credits || us.creditsAvailable || 0,
+            creditsUsed: us.creditsUsed || 0
+          };
+        })
+      );
+      
+      res.json(enrichedServices);
     } catch (error) {
       console.error("Get user services error:", error);
       res.status(500).json({ error: "Erro ao buscar serviços" });
@@ -1480,6 +1506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             txid: pixTxid,
             pushinpayId: pixTxid,
             amount: amountInCents.toString(),
+            planId: planId || existingPendingPayment.planId, // Keep planId if updating
           });
           
           console.log(`✅ [PIX Payment] Updated existing pending payment with new PIX data`);
@@ -1488,6 +1515,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const paymentData = {
             userId: req.session.userId!,
             serviceId, // Use the service from request or default
+            planId: planId || null, // Include planId from request
             amount: amountInCents.toString(), // Store cents as string (decimal column)
             status: "pending" as const,
             txid: pixTxid, // Use REAL PIX ID as primary txid
@@ -2337,16 +2365,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
           nextPaymentDate: nextPaymentDate, // Set next vencimento (day 5 of next month)
         });
         
-        // Upsert UserService - idempotent operation that handles duplicates gracefully
-        // serviceId already declared above
-        const userService = await storage.upsertUserService({
-          userId: payment.userId,
-          serviceId: serviceId,
-          status: "ATIVO",
-          ultimoPagamento: new Date(),
-          proximoPagamento: nextPaymentDate,
-        });
-        console.log(`UserService ${userService.id} upserted for user ${payment.userId} and service ${serviceId}`);
+        // Get existing user_service to update it
+        const existingUserService = await storage.getUserService(payment.userId, serviceId);
+        
+        // Get credits from plan if planId is provided
+        let creditsToAdd = 0;
+        if (payment.planId) {
+          const plan = await storage.getServicePlan(payment.planId);
+          // Extract credits from features if available (for RemoveBG plans)
+          if (plan && plan.features) {
+            try {
+              const features = typeof plan.features === 'string' ? JSON.parse(plan.features) : plan.features;
+              // Look for credits in features array
+              const creditFeature = features.find((f: string) => f.includes('créditos') || f.includes('credits'));
+              if (creditFeature) {
+                const match = creditFeature.match(/\d+/);
+                if (match) {
+                  creditsToAdd = parseInt(match[0], 10);
+                }
+              }
+            } catch (e) {
+              console.error("Error parsing plan features:", e);
+            }
+          }
+        }
+        
+        if (existingUserService) {
+          // Update existing UserService with planId and activate it
+          await storage.updateUserService(existingUserService.id, {
+            status: "ATIVO",
+            ultimoPagamento: new Date(),
+            proximoPagamento: nextPaymentDate,
+            planId: payment.planId || existingUserService.planId,
+            lastPaymentDate: new Date(),
+            credits: creditsToAdd > 0 ? creditsToAdd : existingUserService.credits,
+            creditsAvailable: creditsToAdd > 0 ? creditsToAdd : existingUserService.creditsAvailable
+          });
+          console.log(`UserService ${existingUserService.id} updated for user ${payment.userId} and service ${serviceId} with planId: ${payment.planId}`);
+        } else {
+          // Create new UserService if it doesn't exist (backward compatibility)
+          const userService = await storage.createUserService({
+            userId: payment.userId,
+            serviceId: serviceId,
+            status: "ATIVO",
+            ultimoPagamento: new Date(),
+            proximoPagamento: nextPaymentDate,
+            planId: payment.planId || null,
+            lastPaymentDate: new Date(),
+            credits: creditsToAdd,
+            creditsAvailable: creditsToAdd
+          });
+          console.log(`UserService ${userService.id} created for user ${payment.userId} and service ${serviceId} with planId: ${payment.planId}`);
+        }
+        
+        // Mark old pending payments as expired (except this one)
+        await storage.markOldPendingPaymentsAsExpired(
+          payment.userId,
+          serviceId,
+          payment.id
+        );
         
         console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]} - day 5 of next month)`);
         
@@ -3207,39 +3284,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Subscribe to a service (requires auth)
   app.post("/api/services/subscribe", requireAuth, async (req, res) => {
     try {
-      const { serviceId } = req.body;
+      const { serviceId, planId } = req.body;
       const userId = req.session.userId;
       
       if (!serviceId) {
         return res.status(400).json({ error: "ID do serviço é obrigatório" });
       }
       
-      // Check if user already has this service
-      const existingSubscription = await storage.getUserService(userId!, serviceId);
-      if (existingSubscription) {
-        return res.status(400).json({ 
-          error: "Você já possui este serviço",
-          redirect: "/payment" 
-        });
-      }
-      
-      // Get service details
+      // Validate service exists and is active
       const service = await storage.getService(serviceId);
       if (!service || !service.ativo) {
         return res.status(404).json({ error: "Serviço não encontrado ou inativo" });
       }
       
-      // Create inactive subscription (will be activated after payment)
-      await storage.createUserService({
+      // Validate plan if provided
+      let plan = null;
+      if (planId) {
+        plan = await storage.getServicePlan(planId);
+        if (!plan || plan.serviceId !== serviceId || !plan.isActive) {
+          return res.status(400).json({ error: "Plano inválido para este serviço" });
+        }
+      }
+      
+      // Check if user already has this service
+      const existingUserService = await storage.getUserService(userId!, serviceId);
+      
+      if (existingUserService) {
+        if (existingUserService.status === "ATIVO") {
+          return res.status(400).json({ 
+            error: "Você já possui uma assinatura ativa deste serviço",
+            redirect: "/payment" 
+          });
+        }
+        // Update existing user_service with new planId
+        await storage.updateUserService(existingUserService.id, {
+          planId: planId || null,
+          status: "PENDENTE"
+        });
+      } else {
+        // Create new user_service
+        await storage.createUserService({
+          userId: userId!,
+          serviceId,
+          planId: planId || null,
+          status: "PENDENTE",
+          proximoPagamento: null
+        });
+      }
+      
+      // Calculate payment amount (use plan price if available, otherwise service price)
+      const amountInReais = plan ? parseFloat(plan.price) : parseFloat(service.preco);
+      const amountInCents = Math.round(amountInReais * 100);
+      
+      // Create pending payment
+      const payment = await storage.createPayment({
         userId: userId!,
         serviceId,
-        status: "INATIVO",
-        proximoPagamento: null
+        planId: planId || null,
+        amount: amountInCents.toString(),
+        status: "pending",
+        txid: null,
+        pushinpayId: null
       });
       
       res.json({ 
         success: true, 
         message: "Serviço adicionado! Efetue o pagamento para ativar.",
+        paymentId: payment.id,
         redirect: "/payment"
       });
     } catch (error) {
