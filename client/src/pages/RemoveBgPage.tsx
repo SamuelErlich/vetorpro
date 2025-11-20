@@ -307,7 +307,7 @@ export default function RemoveBgPage() {
         </Alert>
       </main>
 
-      <style jsx>{`
+      <style>{`
         .bg-checkerboard {
           background-image: linear-gradient(45deg, #f0f0f0 25%, transparent 25%),
             linear-gradient(-45deg, #f0f0f0 25%, transparent 25%),
