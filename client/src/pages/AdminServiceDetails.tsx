@@ -572,7 +572,7 @@ export default function ServiceDetails() {
                                             <SelectValue placeholder="Selecione um plano" />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            <SelectItem value="">Sem plano</SelectItem>
+                                            <SelectItem value="null">Sem plano</SelectItem>
                                             {plansArray.map(plan => (
                                               <SelectItem key={plan.id} value={plan.id}>
                                                 {plan.name} - R${plan.price} ({plan.credits} créditos)
