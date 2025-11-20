@@ -35,7 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Credential, Payment, User as UserType, Service } from "@shared/schema";
-import { CreditCard, Download, Key, LogOut, Users, Image, BarChart3, Settings } from "lucide-react";
+import { CreditCard, Download, Key, LogOut, Users, Image, BarChart3, Settings, Package } from "lucide-react";
 
 type AuthMeResponse = { user: UserType };
 type PaymentWithUser = Payment & { userEmail: string };
