@@ -101,6 +101,90 @@ export const removeBgApiKeys = pgTable("removebg_api_keys", {
   createdBy: varchar("created_by").notNull().references(() => users.id), // Admin who created it
 });
 
+// Categories table for organizing services
+export const categories = pgTable("categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  icon: text("icon"), // Lucide icon name
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Enhanced services table with categories and types
+export const servicesV2 = pgTable("services_v2", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  categoryId: varchar("category_id").references(() => categories.id),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  shortDescription: text("short_description"),
+  icon: text("icon"), // Lucide icon name
+  serviceType: text("service_type").notNull().default("COMPARTILHADO"), // COMPARTILHADO, INDIVIDUAL, API
+  isHighlight: boolean("is_highlight").notNull().default(false), // Top seller in category
+  sortOrder: integer("sort_order").notNull().default(0),
+  features: text("features"), // JSON array of feature strings
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+});
+
+// Service plans (Basic, Pro, Ultimate, etc.)
+export const servicePlans = pgTable("service_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  serviceId: varchar("service_id").notNull().references(() => servicesV2.id),
+  name: text("name").notNull(), // Basic, Pro, Ultimate
+  slug: text("slug").notNull(),
+  description: text("description"),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  billingCycle: text("billing_cycle").notNull().default("monthly"), // monthly, quarterly, yearly
+  features: text("features"), // JSON array of plan features
+  limits: text("limits"), // JSON object with plan limits (e.g., credits, storage)
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  isPopular: boolean("is_popular").notNull().default(false), // Badge "Mais Popular"
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+}, (table) => {
+  return {
+    servicePlanUnique: unique("service_plan_unique").on(table.serviceId, table.slug),
+  };
+});
+
+// Service accounts/credentials stock management
+export const serviceAccounts = pgTable("service_accounts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  serviceId: varchar("service_id").notNull().references(() => servicesV2.id),
+  accountData: text("account_data").notNull(), // Encrypted JSON with credentials
+  status: text("status").notNull().default("DISPONIVEL"), // DISPONIVEL, ATRIBUIDO, EXPIRADO, MANUTENCAO
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  assignedToSubscriptionId: varchar("assigned_to_subscription_id").references(() => userSubscriptions.id),
+  assignedAt: timestamp("assigned_at"),
+  validUntil: timestamp("valid_until"), // For time-limited accounts
+  notes: text("notes"), // Admin notes
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+});
+
+// User subscriptions to service plans
+export const userSubscriptions = pgTable("user_subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  servicePlanId: varchar("service_plan_id").notNull().references(() => servicePlans.id),
+  status: text("status").notNull().default("PENDENTE"), // PENDENTE, ATIVO, PAUSADO, CANCELADO, EXPIRADO
+  startDate: timestamp("start_date"),
+  endDate: timestamp("end_date"),
+  nextBillingDate: timestamp("next_billing_date"),
+  autoRenew: boolean("auto_renew").notNull().default(true),
+  metadata: text("metadata"), // JSON with additional subscription data
+  createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
+}, (table) => {
+  return {
+    userSubscriptionUnique: unique("user_subscription_unique").on(table.userId, table.servicePlanId),
+  };
+});
+
 // Insert schemas
 export const insertServiceSchema = createInsertSchema(services).omit({
   id: true,
@@ -153,6 +237,33 @@ export const insertRemoveBgApiKeySchema = createInsertSchema(removeBgApiKeys).om
   lastUsedAt: true,
 });
 
+export const insertCategorySchema = createInsertSchema(categories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertServiceV2Schema = createInsertSchema(servicesV2).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertServicePlanSchema = createInsertSchema(servicePlans).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertServiceAccountSchema = createInsertSchema(serviceAccounts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserSubscriptionSchema = createInsertSchema(userSubscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type InsertService = z.infer<typeof insertServiceSchema>;
 export type Service = typeof services.$inferSelect;
@@ -172,3 +283,13 @@ export type InsertRemoveBgPlan = z.infer<typeof insertRemoveBgPlanSchema>;
 export type RemoveBgPlan = typeof removeBgPlans.$inferSelect;
 export type InsertRemoveBgApiKey = z.infer<typeof insertRemoveBgApiKeySchema>;
 export type RemoveBgApiKey = typeof removeBgApiKeys.$inferSelect;
+export type InsertCategory = z.infer<typeof insertCategorySchema>;
+export type Category = typeof categories.$inferSelect;
+export type InsertServiceV2 = z.infer<typeof insertServiceV2Schema>;
+export type ServiceV2 = typeof servicesV2.$inferSelect;
+export type InsertServicePlan = z.infer<typeof insertServicePlanSchema>;
+export type ServicePlan = typeof servicePlans.$inferSelect;
+export type InsertServiceAccount = z.infer<typeof insertServiceAccountSchema>;
+export type ServiceAccount = typeof serviceAccounts.$inferSelect;
+export type InsertUserSubscription = z.infer<typeof insertUserSubscriptionSchema>;
+export type UserSubscription = typeof userSubscriptions.$inferSelect;
