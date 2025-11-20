@@ -31,7 +31,11 @@ export default function ClientLogin() {
         body: JSON.stringify(credentials),
         headers: { 'Content-Type': 'application/json' },
       }),
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      // Set first login flag in sessionStorage if backend indicates it
+      if (data?.isFirstLogin) {
+        sessionStorage.setItem('isFirstLogin', 'true');
+      }
       queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
       // Always redirect to client dashboard from client login
       setLocation('/dashboard');

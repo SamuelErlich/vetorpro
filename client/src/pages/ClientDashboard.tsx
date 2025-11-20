@@ -6,6 +6,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import VectorizerCard from "@/components/VectorizerCard";
 import PaymentCalendar from "@/components/PaymentCalendar";
 import RemoveBgCard from "@/components/RemoveBgCard";
+import { FirstLoginModal } from "@/components/FirstLoginModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -213,6 +214,9 @@ export default function ClientDashboard() {
           <span className="sr-only">Suporte via WhatsApp</span>
         </a>
       </Button>
+
+      {/* First Login Modal for RemoveBG Feature */}
+      <FirstLoginModal />
     </div>
   );
 }

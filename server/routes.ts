@@ -210,7 +210,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Don't send password to client
       const { password: _, ...userWithoutPassword } = user;
-      res.json({ user: userWithoutPassword });
+      
+      // Check if this is the user's first login (for modal display)
+      // We send this flag so the client can store it in sessionStorage
+      const isFirstLogin = true; // Always true for login, frontend manages localStorage
+      
+      res.json({ 
+        user: userWithoutPassword, 
+        isFirstLogin 
+      });
     } catch (error) {
       console.error("Login error:", error);
       res.status(500).json({ error: "Erro ao fazer login" });
