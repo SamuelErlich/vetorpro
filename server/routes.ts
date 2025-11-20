@@ -2838,6 +2838,126 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== REMOVEBG ROUTES ==========
   app.use("/api/removebg", removeBgRoutes);
 
+  // ========== ADMIN SERVICE MANAGEMENT ROUTES ==========
+  // Get all services (admin)
+  app.get("/api/admin/services", requireAdmin, async (req, res) => {
+    try {
+      const services = await storage.getAllServices();
+      res.json(services);
+    } catch (error) {
+      console.error("Error fetching services:", error);
+      res.status(500).json({ error: "Erro ao buscar serviços" });
+    }
+  });
+
+  // Create new service (admin)
+  app.post("/api/admin/services", requireAdmin, async (req, res) => {
+    try {
+      const { nome, descricao, preco, ativo } = req.body;
+      
+      if (!nome || !preco) {
+        return res.status(400).json({ error: "Nome e preço são obrigatórios" });
+      }
+      
+      const service = await storage.createService({
+        nome,
+        descricao: descricao || null,
+        preco,
+        ativo: ativo !== undefined ? ativo : true
+      });
+      
+      res.status(201).json(service);
+    } catch (error) {
+      console.error("Error creating service:", error);
+      res.status(500).json({ error: "Erro ao criar serviço" });
+    }
+  });
+
+  // Update service (admin)
+  app.put("/api/admin/services/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const service = await storage.updateService(id, updates);
+      
+      if (!service) {
+        return res.status(404).json({ error: "Serviço não encontrado" });
+      }
+      
+      res.json(service);
+    } catch (error) {
+      console.error("Error updating service:", error);
+      res.status(500).json({ error: "Erro ao atualizar serviço" });
+    }
+  });
+
+  // Delete service (admin)
+  app.delete("/api/admin/services/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Check if service has active subscriptions
+      const subscriptions = await storage.getUserServicesByServiceId(id);
+      const activeSubscriptions = subscriptions.filter(s => s.status === "ATIVO");
+      
+      if (activeSubscriptions.length > 0) {
+        return res.status(400).json({ 
+          error: `Não é possível excluir: ${activeSubscriptions.length} assinaturas ativas` 
+        });
+      }
+      
+      // First, deactivate the service
+      await storage.updateService(id, { ativo: false });
+      
+      res.json({ success: true, message: "Serviço desativado com sucesso" });
+    } catch (error) {
+      console.error("Error deleting service:", error);
+      res.status(500).json({ error: "Erro ao excluir serviço" });
+    }
+  });
+
+  // Placeholder endpoints for plans and categories (to be implemented with new tables)
+  app.get("/api/admin/service-plans", requireAdmin, async (req, res) => {
+    // TODO: Implement when servicePlans table is ready
+    res.json([]);
+  });
+
+  app.post("/api/admin/service-plans", requireAdmin, async (req, res) => {
+    // TODO: Implement when servicePlans table is ready
+    res.status(501).json({ error: "Recurso em desenvolvimento" });
+  });
+
+  app.put("/api/admin/service-plans/:id", requireAdmin, async (req, res) => {
+    // TODO: Implement when servicePlans table is ready
+    res.status(501).json({ error: "Recurso em desenvolvimento" });
+  });
+
+  app.delete("/api/admin/service-plans/:id", requireAdmin, async (req, res) => {
+    // TODO: Implement when servicePlans table is ready
+    res.status(501).json({ error: "Recurso em desenvolvimento" });
+  });
+
+  app.get("/api/admin/categories", requireAdmin, async (req, res) => {
+    // TODO: Implement when categories table is ready
+    res.json([]);
+  });
+
+  app.post("/api/admin/categories", requireAdmin, async (req, res) => {
+    // TODO: Implement when categories table is ready
+    res.status(501).json({ error: "Recurso em desenvolvimento" });
+  });
+
+  app.put("/api/admin/categories/:id", requireAdmin, async (req, res) => {
+    // TODO: Implement when categories table is ready
+    res.status(501).json({ error: "Recurso em desenvolvimento" });
+  });
+
+  app.delete("/api/admin/categories/:id", requireAdmin, async (req, res) => {
+    // TODO: Implement when categories table is ready
+    res.status(501).json({ error: "Recurso em desenvolvimento" });
+  });
+
   // ========== MARKETPLACE ROUTES ==========
   // Get all active services for marketplace
   app.get("/api/marketplace/services", async (req, res) => {

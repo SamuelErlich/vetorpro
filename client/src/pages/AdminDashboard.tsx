@@ -12,6 +12,7 @@ import PaymentHistoryDrawer from "@/components/PaymentHistoryDrawer";
 import AdminRemoveBgPanel from "@/components/AdminRemoveBgPanel";
 import AdminRemoveBgUsage from "@/components/AdminRemoveBgUsage";
 import AdminRemoveBgStats from "@/components/AdminRemoveBgStats";
+import AdminServiceManagement from "./AdminServiceManagement";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import UserFormDialog from "@/components/UserFormDialog";
 import { Button } from "@/components/ui/button";
@@ -247,6 +248,7 @@ export default function AdminDashboard() {
 
   const menuItems = [
     { title: "Serviços", icon: Settings, id: "services" },
+    { title: "Marketplace", icon: Package, id: "marketplace" },
     { title: "Usuários", icon: Users, id: "users" },
     { title: "Pagamentos", icon: CreditCard, id: "payments" },
     { title: "RemoveBG", icon: Image, id: "removebg" },
@@ -572,6 +574,10 @@ export default function AdminDashboard() {
                     </TabsContent>
                   </Tabs>
                 </div>
+              )}
+
+              {activeTab === "marketplace" && (
+                <AdminServiceManagement />
               )}
 
               {activeTab === "services" && (
