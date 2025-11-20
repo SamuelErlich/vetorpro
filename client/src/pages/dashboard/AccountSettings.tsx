@@ -107,7 +107,7 @@ export default function AccountSettings() {
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-muted-foreground" />
                 <span className="font-medium">
-                  {user?.isAdmin === "true" ? "Administrador" : "Cliente"}
+                  {user?.isAdmin ? "Administrador" : "Cliente"}
                 </span>
               </div>
             </div>

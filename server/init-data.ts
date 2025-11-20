@@ -18,7 +18,7 @@ export async function initializeData() {
       email: "admin@example.com",
       password: adminPassword,
       status: "ATIVO",
-      isAdmin: "true",
+      isAdmin: true,
     });
     console.log("✓ Admin user created: admin@example.com / admin123");
 
@@ -28,7 +28,7 @@ export async function initializeData() {
       email: "cliente@example.com",
       password: clientPassword,
       status: "ATIVO",
-      isAdmin: "false",
+      isAdmin: false,
     });
     
     // Calculate next payment date (30 days from now)

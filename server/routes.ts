@@ -237,7 +237,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
-      req.session.isAdmin = user.isAdmin === "true";
+      req.session.isAdmin = user.isAdmin;
 
       // Don't send password to client
       const { password: _, ...userWithoutPassword } = user;
@@ -262,7 +262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { email, password } = req.body;
       
       const user = await storage.getUserByEmail(email);
-      if (!user || user.isAdmin !== "true") {
+      if (!user || !user.isAdmin) {
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 
@@ -449,7 +449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email,
         password: null, // Will be set by user via email link
         status: "INATIVO", // Not active until password is created
-        isAdmin: "false",
+        isAdmin: false,
         discount: 0, // Default discount
       });
 
@@ -2015,7 +2015,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email,
         password: hashedPassword, // Will be null if sending email, or hashed password if manual
         status: status || (shouldSendEmail ? "PENDENTE" : "ATIVO"), // Default to ATIVO if password is set manually
-        isAdmin: "false",
+        isAdmin: false,
         discount: 0, // Default discount
       });
 

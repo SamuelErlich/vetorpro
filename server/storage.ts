@@ -230,7 +230,7 @@ export class MemStorage implements IStorage {
       email: insertUser.email,
       password: insertUser.password || null,
       status: insertUser.status || "INATIVO",
-      isAdmin: insertUser.isAdmin || "false",
+      isAdmin: insertUser.isAdmin || false,
       discount: insertUser.discount || 0,
       id,
       ultimoPagamento: null,

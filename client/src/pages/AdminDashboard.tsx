@@ -73,7 +73,7 @@ export default function AdminDashboard() {
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
-    if (!authLoading && (!currentUser?.user || currentUser.user.isAdmin !== "true")) {
+    if (!authLoading && (!currentUser?.user || !currentUser.user.isAdmin)) {
       setLocation('/admin/login');
     }
   }, [currentUser, authLoading, setLocation]);
@@ -91,22 +91,22 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Erro ao buscar usuários");
       return res.json();
     },
-    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
+    enabled: !!currentUser?.user && currentUser.user.isAdmin,
   });
 
   const { data: paymentsData, isLoading: paymentsLoading } = useQuery<PaymentWithUser[]>({
     queryKey: ['/api/admin/payments'],
-    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
+    enabled: !!currentUser?.user && currentUser.user.isAdmin,
   });
 
   const { data: credentialsData, isLoading: credentialsLoading } = useQuery<Credential[]>({
     queryKey: ['/api/admin/credentials'],
-    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
+    enabled: !!currentUser?.user && currentUser.user.isAdmin,
   });
 
   const { data: servicesData, isLoading: servicesLoading } = useQuery<(Service & { activeSubscribers?: number; totalSubscribers?: number })[]>({
     queryKey: ['/api/admin/services'],
-    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
+    enabled: !!currentUser?.user && currentUser.user.isAdmin,
   });
 
   // Mutations
