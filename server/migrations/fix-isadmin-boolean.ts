@@ -6,13 +6,17 @@
  * Solution: Convert to proper boolean type
  */
 
-import { db } from "../db";
+import { drizzle } from "drizzle-orm/neon-http";
+import { neon } from "@neondatabase/serverless";
 import { sql } from "drizzle-orm";
 
 async function migrateIsAdminToBoolean() {
   console.log("🔄 Starting migration: Converting isAdmin from text to boolean...");
   
   try {
+    // Initialize database connection
+    const sqlClient = neon(process.env.DATABASE_URL!);
+    const db = drizzle(sqlClient);
     // Step 1: Add temporary boolean column
     console.log("Step 1: Adding temporary boolean column...");
     await db.execute(sql`
