@@ -21,8 +21,10 @@ import RemoveBgHistory from "./RemoveBgHistory";
 import BeforeAfterSlider from "./BeforeAfterSlider";
 import ImagePreview from "./ImagePreview";
 import ImageModal from "./ImageModal";
-import type { UserService, RemoveBgUsage } from "@shared/schema";
+import type { UserService, RemoveBgUsage, Payment } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 
 interface RemoveBgCardProps {
   userService: UserService | null;
@@ -30,12 +32,25 @@ interface RemoveBgCardProps {
 }
 
 export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardProps) {
+  const [, setLocation] = useLocation();
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [selectedImage, setSelectedImage] = useState<RemoveBgUsage | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   
+  // Access control based on UserServices.status
   const isActive = userService?.status === "ATIVO";
+  
+  // Query for pending payments for this specific service
+  const { data: paymentsData } = useQuery<Payment[]>({
+    queryKey: ['/api/payments'],
+    enabled: !!userService,
+  });
+  
+  // Find pending payment for RemoveBG service
+  const pendingPayment = paymentsData?.find(
+    payment => payment.serviceId === "removebg-001" && payment.status === "pending"
+  );
   
   const { data: creditsData, isLoading: creditsLoading } = useRemoveBgCredits({
     enabled: isActive,
@@ -48,6 +63,15 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
   const credits = creditsData?.credits ?? 0;
   const usage = usageData?.data || [];
   const lastProcessed = usage.length > 0 ? usage[0] : null;
+  
+  const handlePayNow = () => {
+    if (pendingPayment) {
+      // Navigate to RemoveBG payment page with the pending payment
+      setLocation(`/removebg/payment?txid=${pendingPayment.txid}`);
+    } else if (onSubscribe) {
+      onSubscribe();
+    }
+  };
 
   if (!userService) {
     // User doesn't have RemoveBG service - show subscription prompt
@@ -80,7 +104,7 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
   }
 
   if (!isActive) {
-    // User has service but it's not active
+    // User has service but it's INATIVO - show subscribe or pending payment
     return (
       <Card>
         <CardHeader>
@@ -95,19 +119,38 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
             <div className="space-y-2">
               <p className="text-lg font-medium">Serviço Inativo</p>
               <p className="text-sm text-muted-foreground max-w-md">
-                Seu serviço RemoveBG está inativo. Escolha um plano para continuar
-                usando o serviço de remoção de fundo.
+                {pendingPayment 
+                  ? "Você tem um pagamento pendente. Complete o pagamento para ativar o serviço."
+                  : "Escolha um plano para começar a usar o serviço de remoção de fundo."
+                }
               </p>
             </div>
-            {onSubscribe && (
-              <Button 
-                size="sm" 
-                onClick={onSubscribe}
-                data-testid="button-choose-plan-removebg"
-              >
-                <CreditCard className="h-4 w-4 mr-2" />
-                Escolher Plano
-              </Button>
+            
+            {/* Show pending payment or subscribe button */}
+            {pendingPayment ? (
+              <div className="flex flex-col items-center gap-2">
+                <Badge variant="secondary" className="mb-2">
+                  <Clock className="h-3 w-3 mr-1" />
+                  Pagamento Pendente
+                </Badge>
+                <Button 
+                  onClick={handlePayNow}
+                  data-testid="button-pay-pending-removebg"
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Pagar Agora
+                </Button>
+              </div>
+            ) : (
+              onSubscribe && (
+                <Button 
+                  onClick={onSubscribe}
+                  data-testid="button-subscribe-removebg"
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Assinar
+                </Button>
+              )
             )}
           </div>
         </CardContent>
