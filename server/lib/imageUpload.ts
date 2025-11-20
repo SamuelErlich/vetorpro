@@ -98,17 +98,16 @@ export function validateImageFile(
  * @returns User-friendly error message
  */
 export function handleImageUploadError(error: any): string {
-  if (error instanceof multer.MulterError) {
-    switch (error.code) {
-      case "FILE_TOO_LARGE":
-        return "File is too large. Maximum size is 10MB.";
-      case "LIMIT_FILE_COUNT":
-        return "Only one file is allowed.";
-      case "LIMIT_FILE_SIZE":
-        return "File exceeds size limit.";
-      default:
-        return `Upload error: ${error.message}`;
-    }
+  if (error.code === "LIMIT_FILE_SIZE") {
+    return "File is too large. Maximum size is 10MB.";
+  }
+  
+  if (error.code === "LIMIT_FILE_COUNT") {
+    return "Only one file is allowed.";
+  }
+  
+  if (error.code === "LIMIT_UNEXPECTED_FILE") {
+    return "Unexpected field in upload.";
   }
 
   if (error.message) {
