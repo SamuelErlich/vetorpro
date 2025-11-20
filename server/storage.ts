@@ -94,7 +94,10 @@ export interface IStorage {
   deletePayment(id: string): Promise<boolean>;
   getPaymentByTxid(txid: string): Promise<Payment | undefined>;
   getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined>;
-  markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId: string): Promise<void>;
+  markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId?: string): Promise<void>;
+  getRecentPendingPayment(userId: string, serviceId: string, timeWindowMs: number): Promise<Payment | undefined>;
+  expireOldPendingPayments(userId: string, serviceId: string): Promise<void>;
+  expireAllOldPendingPayments(timeWindowMs: number): Promise<void>;
   
   // Password Resets
   createPasswordReset(reset: InsertPasswordReset): Promise<PasswordReset>;
@@ -631,13 +634,51 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId: string): Promise<void> {
+  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId?: string): Promise<void> {
     // Mark all pending payments for this user and service as expired, except the excludeId
     Array.from(this.payments.values()).forEach(payment => {
       if (payment.userId === userId && 
           payment.serviceId === serviceId && 
-          payment.id !== excludeId && 
+          (!excludeId || payment.id !== excludeId) && 
           payment.status === "pending") {
+        payment.status = "canceled_by_system";
+      }
+    });
+  }
+
+  async getRecentPendingPayment(userId: string, serviceId: string, timeWindowMs: number): Promise<Payment | undefined> {
+    const cutoffTime = new Date(Date.now() - timeWindowMs);
+    
+    const recentPayments = Array.from(this.payments.values())
+      .filter(payment => 
+        payment.userId === userId &&
+        payment.serviceId === serviceId &&
+        payment.status === "pending" &&
+        payment.createdAt >= cutoffTime
+      )
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    
+    return recentPayments[0] || undefined;
+  }
+
+  async expireOldPendingPayments(userId: string, serviceId: string): Promise<void> {
+    const cutoffTime = new Date(Date.now() - 60 * 60 * 1000); // 1 hour
+    
+    Array.from(this.payments.values()).forEach(payment => {
+      if (payment.userId === userId && 
+          payment.serviceId === serviceId && 
+          payment.status === "pending" &&
+          payment.createdAt < cutoffTime) {
+        payment.status = "expired";
+      }
+    });
+  }
+
+  async expireAllOldPendingPayments(timeWindowMs: number): Promise<void> {
+    const cutoffTime = new Date(Date.now() - timeWindowMs);
+    
+    Array.from(this.payments.values()).forEach(payment => {
+      if (payment.status === "pending" && payment.createdAt < cutoffTime) {
         payment.status = "expired";
       }
     });
@@ -1473,15 +1514,61 @@ class PostgresStorage implements IStorage {
     return result[0];
   }
 
-  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId: string): Promise<void> {
+  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId?: string): Promise<void> {
     // Mark all pending payments for this user and service as expired, except the excludeId
+    const conditions = [
+      eq(payments.userId, userId),
+      eq(payments.serviceId, serviceId),
+      eq(payments.status, "pending")
+    ];
+    
+    if (excludeId) {
+      conditions.push(sql`${payments.id} != ${excludeId}`);
+    }
+    
+    await this.db.update(payments)
+      .set({ status: "canceled_by_system" })
+      .where(and(...conditions));
+  }
+
+  async getRecentPendingPayment(userId: string, serviceId: string, timeWindowMs: number): Promise<Payment | undefined> {
+    const cutoffTime = new Date(Date.now() - timeWindowMs);
+    
+    const result = await this.db.select()
+      .from(payments)
+      .where(and(
+        eq(payments.userId, userId),
+        eq(payments.serviceId, serviceId),
+        eq(payments.status, "pending"),
+        sql`${payments.createdAt} >= ${cutoffTime}`
+      ))
+      .orderBy(desc(payments.createdAt))
+      .limit(1);
+    
+    return result[0];
+  }
+
+  async expireOldPendingPayments(userId: string, serviceId: string): Promise<void> {
+    const cutoffTime = new Date(Date.now() - 60 * 60 * 1000); // 1 hour
+    
     await this.db.update(payments)
       .set({ status: "expired" })
       .where(and(
         eq(payments.userId, userId),
         eq(payments.serviceId, serviceId),
         eq(payments.status, "pending"),
-        sql`${payments.id} != ${excludeId}`
+        sql`${payments.createdAt} < ${cutoffTime}`
+      ));
+  }
+
+  async expireAllOldPendingPayments(timeWindowMs: number): Promise<void> {
+    const cutoffTime = new Date(Date.now() - timeWindowMs);
+    
+    await this.db.update(payments)
+      .set({ status: "expired" })
+      .where(and(
+        eq(payments.status, "pending"),
+        sql`${payments.createdAt} < ${cutoffTime}`
       ));
   }
 

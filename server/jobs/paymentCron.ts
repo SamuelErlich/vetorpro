@@ -326,6 +326,29 @@ async function cleanupOldRemoveBgImages() {
 }
 
 /**
+ * Clean up old pending payments (older than 24 hours)
+ * Runs daily to avoid polluting payment history with expired payments
+ */
+async function cleanupOldPendingPayments() {
+  console.log('🧹 [CRON] Running pending payment cleanup (expiring payments older than 24 hours)...');
+  
+  try {
+    // Expire all pending payments older than 24 hours
+    await storage.expireAllOldPendingPayments(24 * 60 * 60 * 1000);
+    console.log('   ✅ Expired all pending payments older than 24 hours');
+    
+    // Log some stats for monitoring
+    const allPayments = await storage.getAllPayments();
+    const pendingCount = allPayments.filter(p => p.status === 'pending').length;
+    const expiredCount = allPayments.filter(p => p.status === 'expired' || p.status === 'canceled_by_system').length;
+    
+    console.log(`   📊 Payment stats: ${pendingCount} pending, ${expiredCount} expired/canceled`);
+  } catch (error) {
+    console.error('❌ [CRON ERROR] Pending payment cleanup failed:', error);
+  }
+}
+
+/**
  * Initialize all payment monitoring cron jobs
  * All payments due on DAY 5 of each month
  * Safe to call even if cron environment is not ideal
@@ -365,6 +388,12 @@ export function initializePaymentCron() {
     });
     console.log('   ✅ Scheduled: Daily, 2:00 AM - RemoveBG image cleanup (7+ days old)');
 
+    // DAILY at 3:00 AM - Clean up old pending payments (older than 24 hours)
+    cron.schedule('0 3 * * *', cleanupOldPendingPayments, {
+      timezone: 'America/Sao_Paulo',
+    });
+    console.log('   ✅ Scheduled: Daily, 3:00 AM - Pending payment cleanup (24+ hours old)');
+
     console.log('✅ [CRON] All payment monitoring jobs initialized successfully');
     console.log('   ⚠️  Note: Cron jobs only run while the server is active.');
     console.log('   ⚠️  For 24/7 execution, upgrade to Always-On or Reserved VM.');
@@ -383,4 +412,5 @@ export const manualTriggers = {
   sendPaymentFinalWarningEmails,
   blockOverdueUsers,
   renewRemoveBGCredits,
+  cleanupOldPendingPayments,
 };

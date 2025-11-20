@@ -1548,27 +1548,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use serviceId from request or fallback to default
         const serviceId = requestServiceId || DEFAULT_SERVICE_ID;
         
-        // Check if there's already a pending payment for this user and service
-        const existingPendingPayment = await storage.getPendingPayment(req.session.userId!, serviceId);
+        // Check if there's already a recent pending payment for this user and service (within 1 hour)
+        const recentPendingPayment = await storage.getRecentPendingPayment(
+          req.session.userId!,
+          serviceId,
+          60 * 60 * 1000 // 1 hour window
+        );
         
-        if (existingPendingPayment) {
-          // Reuse the existing pending payment
+        if (recentPendingPayment) {
+          // Reuse the existing pending payment - just update with new PIX data
           console.log(`🔁 [PIX Payment] Reusing existing pending payment:
-            - Payment ID: ${existingPendingPayment.id}
-            - TXID: ${existingPendingPayment.txid}
-            - Created at: ${existingPendingPayment.createdAt}`);
+            - Payment ID: ${recentPendingPayment.id}
+            - Previous TXID: ${recentPendingPayment.txid}
+            - Created at: ${recentPendingPayment.createdAt}`);
           
-          // Update the existing payment with new PIX data
-          payment = await storage.updatePayment(existingPendingPayment.id, {
+          // Update the existing payment with new PIX data (new QR code)
+          payment = await storage.updatePayment(recentPendingPayment.id, {
             txid: pixTxid,
             pushinpayId: pixTxid,
             amount: amountInCents.toString(),
-            planId: planId || existingPendingPayment.planId, // Keep planId if updating
+            planId: planId || recentPendingPayment.planId, // Keep planId if updating
           });
           
           console.log(`✅ [PIX Payment] Updated existing pending payment with new PIX data`);
         } else {
-          // Create new payment only if no pending payment exists
+          // Before creating new payment, expire old pending payments (older than 1 hour)
+          await storage.expireOldPendingPayments(req.session.userId!, serviceId);
+          console.log(`🧹 [PIX Payment] Expired old pending payments for user ${req.session.userId} and service ${serviceId}`);
+          
+          // Create new payment only if no recent pending payment exists
           const paymentData = {
             userId: req.session.userId!,
             serviceId, // Use the service from request or default
@@ -2404,10 +2412,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update payment status
         await storage.updatePayment(payment.id, { status: "paid" });
         
-        // Cancel all other pending payments for the same user and service
+        // Mark all other pending payments for the same user and service as expired/canceled
         const serviceId = payment.serviceId || DEFAULT_SERVICE_ID;
-        await storage.cancelPendingPayments(payment.userId, serviceId, receivedTxid);
-        console.log(`🚫 [WEBHOOK] Cancelled all other pending payments for user ${payment.userId} and service ${serviceId}`);
+        await storage.markOldPendingPaymentsAsExpired(payment.userId, serviceId, payment.id);
+        console.log(`🚫 [WEBHOOK] Marked all other pending payments as expired for user ${payment.userId} and service ${serviceId}`);
         
         // Calculate next payment date: Always day 5 of next month
         const nextPaymentDate = new Date();

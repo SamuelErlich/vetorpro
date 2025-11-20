@@ -31,7 +31,26 @@ export default function PaymentsPage() {
   });
 
   const user = userData?.user;
-  const payments = paymentsData || [];
+  const allPayments = paymentsData || [];
+  
+  // Helper function to check if a payment is recent (within 24 hours)
+  const isRecent = (createdAt: string) => {
+    const paymentDate = new Date(createdAt);
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    return paymentDate > dayAgo;
+  };
+  
+  // Filter out expired and canceled payments by default, keep only relevant ones
+  const payments = allPayments.filter(p => {
+    // Always show paid payments
+    if (p.status === 'paid') return true;
+    
+    // Show pending payments only if they're recent (within 24h)
+    if (p.status === 'pending' && isRecent(p.createdAt)) return true;
+    
+    // Filter out expired, canceled_by_system, and failed payments
+    return false;
+  });
 
   // Format payments for calendar
   const formattedPayments = payments.map((payment) => {
