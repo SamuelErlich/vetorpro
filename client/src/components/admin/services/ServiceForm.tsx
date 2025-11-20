@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -67,6 +68,18 @@ export default function ServiceForm({
       ativo: initialData?.ativo ?? true,
     },
   });
+
+  // Reset form when initialData changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        nome: initialData?.nome || "",
+        descricao: initialData?.descricao || "",
+        preco: initialData?.preco || "",
+        ativo: initialData?.ativo ?? true,
+      });
+    }
+  }, [open, initialData, form]);
 
   const handleSubmit = async (data: ServiceFormData) => {
     try {

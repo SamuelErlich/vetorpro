@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -113,6 +114,25 @@ export default function PlanForm({
       isActive: initialData?.isActive ?? true,
     },
   });
+
+  // Reset form when initialData changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        serviceId: initialData?.serviceId || "",
+        name: initialData?.name || "",
+        description: initialData?.description || "",
+        price: initialData?.price || "",
+        billingCycle: (initialData?.billingCycle as any) || "monthly",
+        features: initialData?.features ? JSON.stringify(initialData.features, null, 2) : "{}",
+        maxUsers: initialData?.maxUsers?.toString() || "",
+        credits: initialData?.credits?.toString() || "",
+        storageLimit: initialData?.storageLimit?.toString() || "",
+        apiCallsLimit: initialData?.apiCallsLimit?.toString() || "",
+        isActive: initialData?.isActive ?? true,
+      });
+    }
+  }, [open, initialData, form]);
 
   const handleSubmit = async (data: PlanFormData) => {
     try {

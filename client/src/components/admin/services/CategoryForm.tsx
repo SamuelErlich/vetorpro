@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -73,6 +74,19 @@ export default function CategoryForm({
       isActive: initialData?.isActive ?? true,
     },
   });
+
+  // Reset form when initialData changes or dialog opens
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        name: initialData?.name || "",
+        description: initialData?.description || "",
+        icon: initialData?.icon || "",
+        displayOrder: initialData?.displayOrder?.toString() || "0",
+        isActive: initialData?.isActive ?? true,
+      });
+    }
+  }, [open, initialData, form]);
 
   const handleSubmit = async (data: CategoryFormData) => {
     try {
