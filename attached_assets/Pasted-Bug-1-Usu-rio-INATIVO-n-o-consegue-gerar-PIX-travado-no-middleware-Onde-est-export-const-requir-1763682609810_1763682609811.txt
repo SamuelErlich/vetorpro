@@ -1,0 +1,100 @@
+Bug 1 – Usuário INATIVO não consegue gerar PIX (travado no middleware)
+Onde está
+export const requireAuth: express.RequestHandler = async (req, res, next) => {
+  if (!req.session?.userId) {
+    return res.status(401).json({ error: "Não autenticado" });
+  }
+  
+  try {
+    const user = await storage.getUser(req.session.userId);
+    ...
+    if (!user.isAdmin && user.status !== 'ATIVO') {
+      req.session.destroy(...)
+      const message = user.status === 'BLOQUEADO' 
+        ? "Conta bloqueada por falta de pagamento"
+        : "Conta inativa - realize o pagamento para ativar";
+      
+      return res.status(403).json({ error: message });
+    }
+    
+    (req as any).user = user;
+    next();
+  } ...
+};
+
+
+E na rota de pagamento:
+
+app.post("/api/payments/pix", requireAuth, async (req, res) => { ... });
+
+O problema
+
+Usuário novo é criado com status: "INATIVO".
+
+Ele consegue fazer login, mas qualquer rota com requireAuth já toma 403, inclusive:
+
+/api/payments/pix → ele não consegue nem gerar o PIX pra virar ATIVO.
+
+Ou seja: fluxo de ativação trava.
+O que você quer é:
+
+requireAuth = qualquer usuário logado
+
+E um middleware separado pra rotas que exigem status ATIVO.
+
+Como corrigir (recomendado)
+
+Cria dois middlewares:
+
+// 1) Só garante que existe usuário logado
+export const requireAuth: express.RequestHandler = async (req, res, next) => {
+  if (!req.session?.userId) {
+    return res.status(401).json({ error: "Não autenticado" });
+  }
+
+  try {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: "Usuário não encontrado" });
+    }
+
+    (req as any).user = user;
+    next();
+  } catch (error) {
+    console.error("Erro ao validar autenticação:", error);
+    return res.status(500).json({ error: "Erro ao validar sessão" });
+  }
+};
+
+// 2) Para rotas que exigem conta ATIVA
+export const requireActiveUser: express.RequestHandler = async (req, res, next) => {
+  const user = (req as any).user;
+
+  if (!user) {
+    return res.status(500).json({ error: "Usuário não carregado na sessão" });
+  }
+
+  if (!user.isAdmin && user.status !== "ATIVO") {
+    const message = user.status === "BLOQUEADO"
+      ? "Conta bloqueada por falta de pagamento"
+      : "Conta inativa - realize o pagamento para ativar";
+
+    return res.status(403).json({ error: message });
+  }
+
+  next();
+};
+
+
+E aí usa assim:
+
+// Pode ser usado por INATIVO (pra pagar)
+app.post("/api/payments/pix", requireAuth, ...);
+
+// Deve exigir ATIVO
+app.get("/api/credentials", requireAuth, requireActiveUser, ...);
+app.post("/api/removebg/remove-background", requireAuth, requireActiveUser, ...);
+
+
+Hoje, do jeito que está, até a tela de credenciais “bloqueadas” do Dashboard nunca é exibida, porque o 403 já estoura antes.

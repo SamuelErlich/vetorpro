@@ -59,14 +59,14 @@ declare module 'express-session' {
   }
 }
 
-// Middleware to check if user is authenticated and has valid status
+// Middleware to check if user is authenticated (allows ATIVO and INATIVO, blocks BLOQUEADO)
 const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Não autenticado" });
   }
   
   try {
-    // Fetch user to check current status
+    // Fetch user to check if exists
     const user = await storage.getUser(req.session.userId);
     
     if (!user) {
@@ -75,63 +75,61 @@ const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
       return res.status(401).json({ error: "Sessão inválida" });
     }
     
-    // Check if non-admin user is blocked or inactive
-    if (!user.isAdmin && user.status !== "ATIVO") {
-      // Destroy session for blocked/inactive non-admin users
-      req.session.destroy(() => {});
-      
-      if (user.status === "BLOQUEADO") {
-        return res.status(403).json({ 
-          error: "Conta bloqueada. Entre em contato com o suporte via WhatsApp.",
-          blocked: true,
-          status: user.status
-        });
-      } else {
-        return res.status(403).json({ 
-          error: "Acesso negado. Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
-          inactive: true,
-          status: user.status
-        });
-      }
-    }
-    
-    // Attach user to request for use in next middleware/route
-    (req as any).user = user;
-    next();
-  } catch (error) {
-    console.error("Error checking user authentication and status:", error);
-    return res.status(500).json({ error: "Erro ao verificar autenticação" });
-  }
-};
-
-// Enhanced middleware to check if user is authenticated AND active
-const requireActiveAuth = async (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session.userId) {
-    return res.status(401).json({ error: "Não autenticado" });
-  }
-  
-  try {
-    const user = await storage.getUser(req.session.userId);
-    if (!user) {
-      return res.status(401).json({ error: "Usuário não encontrado" });
-    }
-    
-    // Check if user status is ATIVO
-    if (user.status !== "ATIVO") {
-      // Log them out if inactive
+    // CRITICAL: Block BLOQUEADO users immediately, destroy session
+    if (user.status === "BLOQUEADO") {
       req.session.destroy(() => {});
       return res.status(403).json({ 
-        error: "Acesso negado. Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
-        inactive: true,
+        error: "Conta bloqueada por falta de pagamento. Entre em contato com o suporte.",
+        blocked: true,
         status: user.status 
       });
     }
     
+    // Attach user to request for use in next middleware/route
+    // Allow ATIVO and INATIVO to proceed (INATIVO needs to generate PIX)
+    (req as any).user = user;
     next();
   } catch (error) {
-    console.error("Error checking user status:", error);
-    return res.status(500).json({ error: "Erro ao verificar status do usuário" });
+    console.error("Error checking user authentication:", error);
+    return res.status(500).json({ error: "Erro ao verificar autenticação" });
   }
+};
+
+// Middleware to check if user has ACTIVE status (must be used AFTER requireAuth)
+const requireActiveUser = async (req: Request, res: Response, next: NextFunction) => {
+  const user = (req as any).user;
+  
+  if (!user) {
+    return res.status(500).json({ error: "Usuário não carregado na sessão. Use requireAuth primeiro." });
+  }
+  
+  // Admins can access even if not ATIVO
+  if (user.isAdmin) {
+    return next();
+  }
+  
+  // Check if non-admin user status is ATIVO
+  if (user.status !== "ATIVO") {
+    if (user.status === "BLOQUEADO") {
+      // Destroy session for blocked users
+      req.session.destroy(() => {});
+      return res.status(403).json({ 
+        error: "Conta bloqueada por falta de pagamento. Entre em contato com o suporte.",
+        blocked: true,
+        status: user.status 
+      });
+    } else {
+      // User is INATIVO or PENDENTE
+      return res.status(403).json({ 
+        error: "Conta inativa. Realize o pagamento para acessar este recurso.",
+        inactive: true,
+        status: user.status
+      });
+    }
+  }
+  
+  // User is ATIVO, proceed
+  next();
 };
 
 // Middleware to check if user is admin
@@ -176,36 +174,7 @@ const requireAdmin = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
-// Middleware to check user status (for protecting routes from blocked users)
-const checkUserStatus = async (req: Request, res: Response, next: NextFunction) => {
-  // If no session, let other middlewares handle it
-  if (!req.session?.userId) return next();
-  
-  try {
-    const user = await storage.getUser(req.session.userId);
-    if (!user) {
-      req.session.destroy(() => {});
-      return res.status(401).json({ error: "Sessão inválida" });
-    }
-    
-    // If user is BLOQUEADO, destroy session and deny access
-    if (user.status === "BLOQUEADO") {
-      req.session.destroy(() => {});
-      return res.status(403).json({ 
-        error: "Conta bloqueada. Entre em contato com o suporte via WhatsApp.",
-        blocked: true,
-        status: user.status
-      });
-    }
-    
-    // Attach user to request for use in next middleware/route
-    (req as any).user = user;
-    next();
-  } catch (error) {
-    console.error("Error checking user status:", error);
-    return res.status(500).json({ error: "Erro ao verificar status do usuário" });
-  }
-};
+// checkUserStatus middleware removed - functionality consolidated into requireAuth and requireActiveUser
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // SECURITY: Validate webhook secret at startup (fail fast) - MANDATORY
@@ -1008,7 +977,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CREDENTIAL ROUTES ==========
   
   // Get user's credentials (controlled by UserServices.status, not user.status)
-  app.get("/api/credentials", requireAuth, checkUserStatus, async (req, res) => {
+  app.get("/api/credentials", requireAuth, requireActiveUser, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const user = await storage.getUser(userId);
@@ -1039,7 +1008,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get credentials for a specific service - checks if user has active access
-  app.get("/api/credentials/:serviceId", requireAuth, checkUserStatus, async (req, res) => {
+  app.get("/api/credentials/:serviceId", requireAuth, requireActiveUser, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const { serviceId } = req.params;
