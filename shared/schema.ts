@@ -20,7 +20,7 @@ export const users = pgTable("users", {
   status: text("status").notNull().default("INATIVO"), // Mantido para compatibilidade com UI atual
   ultimoPagamento: timestamp("ultimo_pagamento"), // Mantido para compatibilidade
   nextPaymentDate: timestamp("next_payment_date"), // Mantido para compatibilidade
-  isAdmin: text("is_admin").notNull().default("false"),
+  isAdmin: boolean("is_admin").notNull().default(false),
   discount: integer("discount").notNull().default(0), // Percentage discount 0-100
 });
 
