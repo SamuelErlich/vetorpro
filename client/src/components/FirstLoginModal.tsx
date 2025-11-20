@@ -31,7 +31,7 @@ export function FirstLoginModal() {
 
   const handleViewNow = () => {
     setOpen(false);
-    navigate("/payment");
+    navigate("/removebg/plans");
   };
 
   const handleViewLater = () => {
