@@ -248,7 +248,7 @@ export default function AdminDashboard() {
 
   const menuItems = [
     { title: "Serviços", icon: Settings, id: "services" },
-    { title: "Marketplace", icon: Package, id: "marketplace" },
+    { title: "Serviços", icon: Package, id: "marketplace" },
     { title: "Usuários", icon: Users, id: "users" },
     { title: "Pagamentos", icon: CreditCard, id: "payments" },
     { title: "RemoveBG", icon: Image, id: "removebg" },

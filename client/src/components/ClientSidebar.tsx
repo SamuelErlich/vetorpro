@@ -50,10 +50,10 @@ export function ClientSidebar({ userEmail, activeServices, onLogout }: ClientSid
       path: "/dashboard",
     },
     {
-      title: "Marketplace",
+      title: "Serviços",
       icon: Store,
-      path: "/marketplace",
-      badge: "Novo",
+      path: "/services",
+      badge: "Explorar",
     },
   ];
 
@@ -145,7 +145,7 @@ export function ClientSidebar({ userEmail, activeServices, onLogout }: ClientSid
               <div className="px-3 py-6 text-center text-sm text-muted-foreground">
                 <Package className="h-8 w-8 mx-auto mb-2 opacity-40" />
                 <p>Nenhum serviço ativo</p>
-                <p className="text-xs mt-1">Explore o marketplace para começar</p>
+                <p className="text-xs mt-1">Explore os serviços para começar</p>
               </div>
             </SidebarGroupContent>
           </SidebarGroup>

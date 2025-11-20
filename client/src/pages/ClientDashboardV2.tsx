@@ -12,7 +12,7 @@ import type { User as UserType, UserService } from "@shared/schema";
 import DashboardHome from "./dashboard/DashboardHome";
 import VectorizerService from "./services/VectorizerService";
 import RemoveBgService from "./services/RemoveBgService";
-import Marketplace from "./dashboard/Marketplace";
+import Services from "./dashboard/Services";
 import PaymentsPage from "./dashboard/PaymentsPage";
 import AccountSettings from "./dashboard/AccountSettings";
 
@@ -122,7 +122,7 @@ export default function ClientDashboardV2() {
               <Route path="/dashboard" component={DashboardHome} />
               <Route path="/dashboard/services/vectorizer" component={VectorizerService} />
               <Route path="/dashboard/services/removebg" component={RemoveBgService} />
-              <Route path="/marketplace" component={Marketplace} />
+              <Route path="/services" component={Services} />
               <Route path="/payments" component={PaymentsPage} />
               <Route path="/account" component={AccountSettings} />
               {/* Default route */}

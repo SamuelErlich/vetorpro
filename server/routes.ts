@@ -2958,9 +2958,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(501).json({ error: "Recurso em desenvolvimento" });
   });
 
-  // ========== MARKETPLACE ROUTES ==========
-  // Get all active services for marketplace
-  app.get("/api/marketplace/services", async (req, res) => {
+  // ========== SERVICES ROUTES (NEW) ==========
+  // Get all active services
+  app.get("/api/services", async (req, res) => {
     try {
       const services = await storage.getActiveServices();
       
@@ -3013,7 +3013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get service categories
-  app.get("/api/marketplace/categories", async (req, res) => {
+  app.get("/api/services/categories", async (req, res) => {
     try {
       const services = await storage.getActiveServices();
       
@@ -3045,7 +3045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get service details by ID
-  app.get("/api/marketplace/services/:id", async (req, res) => {
+  app.get("/api/services/:id", async (req, res) => {
     try {
       const service = await storage.getService(req.params.id);
       
@@ -3061,7 +3061,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Subscribe to a service (requires auth)
-  app.post("/api/marketplace/subscribe", requireAuth, async (req, res) => {
+  app.post("/api/services/subscribe", requireAuth, async (req, res) => {
     try {
       const { serviceId } = req.body;
       const userId = req.session.userId;
@@ -3102,6 +3102,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error subscribing to service:", error);
       res.status(500).json({ error: "Erro ao adicionar serviço" });
     }
+  });
+  
+  // ========== MARKETPLACE ROUTES (LEGACY ALIASES) ==========
+  // These endpoints are maintained for backward compatibility
+  // They simply forward requests to the new /api/services endpoints
+  
+  // Legacy: Get all active services for marketplace
+  app.get("/api/marketplace/services", async (req, res) => {
+    // Forward to new endpoint
+    req.url = "/api/services";
+    app.handle(req, res);
+  });
+  
+  // Legacy: Get service categories
+  app.get("/api/marketplace/categories", async (req, res) => {
+    // Forward to new endpoint
+    req.url = "/api/services/categories";
+    app.handle(req, res);
+  });
+  
+  // Legacy: Get service details by ID
+  app.get("/api/marketplace/services/:id", async (req, res) => {
+    // Forward to new endpoint
+    req.url = `/api/services/${req.params.id}`;
+    app.handle(req, res);
+  });
+  
+  // Legacy: Subscribe to a service
+  app.post("/api/marketplace/subscribe", requireAuth, async (req, res) => {
+    // Forward to new endpoint
+    req.url = "/api/services/subscribe";
+    app.handle(req, res);
   });
   
   // RemoveBG API Token Management Routes (Admin only)

@@ -25,7 +25,7 @@ function Router() {
       {/* Client Dashboard with nested routes */}
       <Route path="/dashboard" component={ClientDashboardV2} />
       <Route path="/dashboard/:rest*" component={ClientDashboardV2} />
-      <Route path="/marketplace" component={ClientDashboardV2} />
+      <Route path="/services" component={ClientDashboardV2} />
       <Route path="/payments" component={ClientDashboardV2} />
       <Route path="/account" component={ClientDashboardV2} />
       <Route path="/admin" component={AdminDashboard} />

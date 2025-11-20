@@ -58,7 +58,7 @@ interface Category {
   count: number;
 }
 
-export default function Marketplace() {
+export default function Services() {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
@@ -66,20 +66,20 @@ export default function Marketplace() {
 
   // Fetch services from API
   const { data: services = [], isLoading: servicesLoading } = useQuery<Service[]>({
-    queryKey: ["/api/marketplace/services"],
+    queryKey: ["/api/services"],
     staleTime: 1000 * 60 * 5 // Cache for 5 minutes
   });
 
   // Fetch categories from API
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
-    queryKey: ["/api/marketplace/categories"],
+    queryKey: ["/api/services/categories"],
     staleTime: 1000 * 60 * 5 // Cache for 5 minutes
   });
 
   // Subscribe mutation
   const subscribeMutation = useMutation({
     mutationFn: (serviceId: string) => 
-      apiRequest("/api/marketplace/subscribe", {
+      apiRequest("/api/services/subscribe", {
         method: "POST",
         body: JSON.stringify({ serviceId })
       }),
@@ -183,7 +183,7 @@ export default function Marketplace() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Marketplace</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Serviços</h1>
         <p className="text-muted-foreground">
           Explore e contrate novos serviços para turbinar sua produtividade
         </p>
