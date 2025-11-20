@@ -208,23 +208,27 @@ export default function AdminServiceManagement() {
         ? `/api/admin/service-plans/${data.id}`
         : "/api/admin/service-plans";
       
-      // Parse features from JSON string
-      let features = {};
+      // Process features - backend expects a JSON string
+      let features = "";
       try {
         if (data.features) {
-          features = JSON.parse(data.features);
+          // Try to parse as JSON to validate it
+          const parsed = JSON.parse(data.features);
+          features = data.features; // If valid JSON, send as is
         }
       } catch (e) {
-        // If not valid JSON, split by line and create feature list
-        features = data.features.split('\n').filter(f => f.trim()).reduce((acc, f, i) => {
-          acc[`feature_${i}`] = f.trim();
-          return acc;
-        }, {} as Record<string, string>);
+        // If not valid JSON, treat as line-separated list
+        if (data.features) {
+          const featureList = data.features.split('\n')
+            .filter(f => f.trim())
+            .map(f => f.trim());
+          features = JSON.stringify(featureList);
+        }
       }
       
       const payload = {
         ...data,
-        features,
+        features: features || undefined,
         maxUsers: data.maxUsers ? parseInt(data.maxUsers) : undefined
       };
       

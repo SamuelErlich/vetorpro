@@ -1710,7 +1710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return {
             ...payment,
             userEmail: user?.email || "Unknown",
-            serviceName: service?.name || "N/A",
+            serviceName: service?.nome || "N/A",
           };
         })
       );
@@ -2917,45 +2917,189 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Placeholder endpoints for plans and categories (to be implemented with new tables)
+  // ========== SERVICE PLANS ENDPOINTS ==========
   app.get("/api/admin/service-plans", requireAdmin, async (req, res) => {
-    // TODO: Implement when servicePlans table is ready
-    res.json([]);
+    try {
+      const { serviceId } = req.query;
+      
+      let plans;
+      if (serviceId && typeof serviceId === 'string') {
+        plans = await storage.getServicePlansByServiceId(serviceId);
+      } else {
+        plans = await storage.getAllServicePlans();
+      }
+      
+      res.json(plans);
+    } catch (error) {
+      console.error("Error fetching service plans:", error);
+      res.status(500).json({ error: "Erro ao buscar planos de serviço" });
+    }
   });
 
   app.post("/api/admin/service-plans", requireAdmin, async (req, res) => {
-    // TODO: Implement when servicePlans table is ready
-    res.status(501).json({ error: "Recurso em desenvolvimento" });
+    try {
+      const { insertServicePlanSchema } = await import("@shared/schema");
+      
+      // Validate request body
+      const validation = insertServicePlanSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Dados inválidos", 
+          details: validation.error.errors 
+        });
+      }
+      
+      // Create the service plan
+      const plan = await storage.createServicePlan(validation.data);
+      res.status(201).json(plan);
+    } catch (error: any) {
+      console.error("Error creating service plan:", error);
+      if (error.message?.includes("does not exist")) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Erro ao criar plano de serviço" });
+      }
+    }
   });
 
   app.put("/api/admin/service-plans/:id", requireAdmin, async (req, res) => {
-    // TODO: Implement when servicePlans table is ready
-    res.status(501).json({ error: "Recurso em desenvolvimento" });
+    try {
+      const { id } = req.params;
+      const { updateServicePlanSchema } = await import("@shared/schema");
+      
+      // Validate request body
+      const validation = updateServicePlanSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Dados inválidos", 
+          details: validation.error.errors 
+        });
+      }
+      
+      // Update the service plan
+      const plan = await storage.updateServicePlan(id, validation.data);
+      if (!plan) {
+        return res.status(404).json({ error: "Plano não encontrado" });
+      }
+      
+      res.json(plan);
+    } catch (error) {
+      console.error("Error updating service plan:", error);
+      res.status(500).json({ error: "Erro ao atualizar plano de serviço" });
+    }
   });
 
   app.delete("/api/admin/service-plans/:id", requireAdmin, async (req, res) => {
-    // TODO: Implement when servicePlans table is ready
-    res.status(501).json({ error: "Recurso em desenvolvimento" });
+    try {
+      const { id } = req.params;
+      
+      // Check if plan exists
+      const plan = await storage.getServicePlan(id);
+      if (!plan) {
+        return res.status(404).json({ error: "Plano não encontrado" });
+      }
+      
+      // TODO: Check if there are active subscriptions using this plan
+      // For now, we'll just soft delete it
+      const deleted = await storage.deleteServicePlan(id);
+      if (!deleted) {
+        return res.status(400).json({ error: "Não foi possível deletar o plano" });
+      }
+      
+      res.json({ success: true, message: "Plano desativado com sucesso" });
+    } catch (error) {
+      console.error("Error deleting service plan:", error);
+      res.status(500).json({ error: "Erro ao deletar plano de serviço" });
+    }
   });
 
+  // ========== CATEGORIES ENDPOINTS ==========
   app.get("/api/admin/categories", requireAdmin, async (req, res) => {
-    // TODO: Implement when categories table is ready
-    res.json([]);
+    try {
+      const categories = await storage.getAllCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ error: "Erro ao buscar categorias" });
+    }
   });
 
   app.post("/api/admin/categories", requireAdmin, async (req, res) => {
-    // TODO: Implement when categories table is ready
-    res.status(501).json({ error: "Recurso em desenvolvimento" });
+    try {
+      const { insertCategorySchema } = await import("@shared/schema");
+      
+      // Validate request body
+      const validation = insertCategorySchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Dados inválidos", 
+          details: validation.error.errors 
+        });
+      }
+      
+      // Create the category
+      const category = await storage.createCategory(validation.data);
+      res.status(201).json(category);
+    } catch (error: any) {
+      console.error("Error creating category:", error);
+      if (error.message?.includes("already exists")) {
+        res.status(400).json({ error: error.message });
+      } else {
+        res.status(500).json({ error: "Erro ao criar categoria" });
+      }
+    }
   });
 
   app.put("/api/admin/categories/:id", requireAdmin, async (req, res) => {
-    // TODO: Implement when categories table is ready
-    res.status(501).json({ error: "Recurso em desenvolvimento" });
+    try {
+      const { id } = req.params;
+      const { updateCategorySchema } = await import("@shared/schema");
+      
+      // Validate request body
+      const validation = updateCategorySchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({ 
+          error: "Dados inválidos", 
+          details: validation.error.errors 
+        });
+      }
+      
+      // Update the category
+      const category = await storage.updateCategory(id, validation.data);
+      if (!category) {
+        return res.status(404).json({ error: "Categoria não encontrada" });
+      }
+      
+      res.json(category);
+    } catch (error) {
+      console.error("Error updating category:", error);
+      res.status(500).json({ error: "Erro ao atualizar categoria" });
+    }
   });
 
   app.delete("/api/admin/categories/:id", requireAdmin, async (req, res) => {
-    // TODO: Implement when categories table is ready
-    res.status(501).json({ error: "Recurso em desenvolvimento" });
+    try {
+      const { id } = req.params;
+      
+      // Check if category exists
+      const category = await storage.getCategory(id);
+      if (!category) {
+        return res.status(404).json({ error: "Categoria não encontrada" });
+      }
+      
+      // Try to delete (will fail if services are using this category)
+      const deleted = await storage.deleteCategory(id);
+      if (!deleted) {
+        return res.status(400).json({ 
+          error: "Não foi possível deletar a categoria. Verifique se existem serviços usando esta categoria." 
+        });
+      }
+      
+      res.json({ success: true, message: "Categoria deletada com sucesso" });
+    } catch (error) {
+      console.error("Error deleting category:", error);
+      res.status(500).json({ error: "Erro ao deletar categoria" });
+    }
   });
 
   // ========== SERVICES ROUTES (NEW) ==========
@@ -2968,7 +3112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const marketplaceServices = services.map(service => {
         // Define categories based on service ID
         let category = "Geral";
-        let features = [];
+        let features: string[] = [];
         let isPopular = false;
         let isHighlight = false;
         
@@ -3106,34 +3250,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   // ========== MARKETPLACE ROUTES (LEGACY ALIASES) ==========
   // These endpoints are maintained for backward compatibility
-  // They simply forward requests to the new /api/services endpoints
+  // They delegate to the same logic as the new /api/services endpoints
   
   // Legacy: Get all active services for marketplace
   app.get("/api/marketplace/services", async (req, res) => {
-    // Forward to new endpoint
-    req.url = "/api/services";
-    app.handle(req, res);
+    try {
+      const services = await storage.getActiveServices();
+      
+      // Transform service data for marketplace display
+      const marketplaceServices = services.map(service => {
+        // Define categories based on service ID
+        let category = "Geral";
+        let features: string[] = [];
+        let isPopular = false;
+        let isHighlight = false;
+        
+        if (service.id === "vectorizer-001") {
+          category = "Produtividade";
+          features = [
+            "Vetorização ilimitada",
+            "Alta qualidade",
+            "Suporte API",
+            "Processamento em lote"
+          ];
+          isPopular = true;
+        } else if (service.id === "removebg-001") {
+          category = "Imagens";
+          features = [
+            "Precisão com IA",
+            "HD e 4K",
+            "PNG transparente",
+            "Processamento rápido"
+          ];
+          isHighlight = true;
+        }
+        
+        return {
+          id: service.id,
+          nome: service.nome,
+          descricao: service.descricao,
+          preco: service.preco,
+          ativo: service.ativo,
+          category,
+          features,
+          isPopular,
+          isHighlight
+        };
+      });
+      
+      res.json(marketplaceServices);
+    } catch (error) {
+      console.error("Error fetching marketplace services:", error);
+      res.status(500).json({ error: "Erro ao buscar serviços" });
+    }
   });
   
   // Legacy: Get service categories
   app.get("/api/marketplace/categories", async (req, res) => {
-    // Forward to new endpoint
-    req.url = "/api/services/categories";
-    app.handle(req, res);
+    try {
+      const categories = await storage.getAllCategories();
+      res.json(categories);
+    } catch (error) {
+      console.error("Error fetching categories:", error);
+      res.status(500).json({ error: "Erro ao buscar categorias" });
+    }
   });
   
   // Legacy: Get service details by ID
   app.get("/api/marketplace/services/:id", async (req, res) => {
-    // Forward to new endpoint
-    req.url = `/api/services/${req.params.id}`;
-    app.handle(req, res);
+    try {
+      const { id } = req.params;
+      const service = await storage.getService(id);
+      
+      if (!service || !service.ativo) {
+        return res.status(404).json({ error: "Serviço não encontrado ou inativo" });
+      }
+      
+      res.json(service);
+    } catch (error) {
+      console.error("Error fetching service:", error);
+      res.status(500).json({ error: "Erro ao buscar serviço" });
+    }
   });
   
   // Legacy: Subscribe to a service
   app.post("/api/marketplace/subscribe", requireAuth, async (req, res) => {
-    // Forward to new endpoint
-    req.url = "/api/services/subscribe";
-    app.handle(req, res);
+    try {
+      const { serviceId } = req.body;
+      const userId = req.session.userId;
+      
+      if (!serviceId) {
+        return res.status(400).json({ error: "Service ID is required" });
+      }
+      
+      // Verify service exists and is active
+      const service = await storage.getService(serviceId);
+      if (!service || !service.ativo) {
+        return res.status(404).json({ error: "Serviço não encontrado ou inativo" });
+      }
+      
+      // Create inactive subscription (will be activated after payment)
+      await storage.createUserService({
+        userId: userId!,
+        serviceId,
+        status: "INATIVO",
+        proximoPagamento: null
+      });
+      
+      res.json({ 
+        success: true, 
+        message: "Serviço adicionado! Efetue o pagamento para ativar.",
+        redirect: "/payment"
+      });
+    } catch (error) {
+      console.error("Error subscribing to service:", error);
+      res.status(500).json({ error: "Erro ao adicionar serviço" });
+    }
   });
   
   // RemoveBG API Token Management Routes (Admin only)

@@ -108,9 +108,10 @@ export const categories = pgTable("categories", {
   slug: text("slug").notNull().unique(),
   description: text("description"),
   icon: text("icon"), // Lucide icon name
-  sortOrder: integer("sort_order").notNull().default(0),
+  displayOrder: integer("display_order").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
 // Enhanced services table with categories and types
@@ -133,22 +134,18 @@ export const servicesV2 = pgTable("services_v2", {
 // Service plans (Basic, Pro, Ultimate, etc.)
 export const servicePlans = pgTable("service_plans", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  serviceId: varchar("service_id").notNull().references(() => servicesV2.id),
-  name: text("name").notNull(), // Basic, Pro, Ultimate
-  slug: text("slug").notNull(),
+  serviceId: varchar("service_id").notNull().references(() => services.id),
+  name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  billingCycle: text("billing_cycle").notNull().default("monthly"), // monthly, quarterly, yearly
-  features: text("features"), // JSON array of plan features
-  limits: text("limits"), // JSON object with plan limits (e.g., credits, storage)
-  sortOrder: integer("sort_order").notNull().default(0),
+  billingCycle: varchar("billing_cycle", { length: 20 }).notNull().default("monthly"), // monthly, quarterly, yearly
+  features: text("features"), // JSON string of features array
   isActive: boolean("is_active").notNull().default(true),
-  isPopular: boolean("is_popular").notNull().default(false), // Badge "Mais Popular"
+  maxUsers: integer("max_users"),
+  storageLimit: integer("storage_limit"), // em MB
+  apiCallsLimit: integer("api_calls_limit"),
   createdAt: timestamp("created_at").notNull().default(sql`now()`),
-}, (table) => {
-  return {
-    servicePlanUnique: unique("service_plan_unique").on(table.serviceId, table.slug),
-  };
+  updatedAt: timestamp("updated_at").notNull().default(sql`now()`),
 });
 
 // Service accounts/credentials stock management
@@ -240,6 +237,11 @@ export const insertRemoveBgApiKeySchema = createInsertSchema(removeBgApiKeys).om
 export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
+});
+
+export const updateCategorySchema = insertCategorySchema.partial().omit({
+  id: true
 });
 
 export const insertServiceV2Schema = createInsertSchema(servicesV2).omit({
@@ -250,6 +252,11 @@ export const insertServiceV2Schema = createInsertSchema(servicesV2).omit({
 export const insertServicePlanSchema = createInsertSchema(servicePlans).omit({
   id: true,
   createdAt: true,
+  updatedAt: true,
+});
+
+export const updateServicePlanSchema = insertServicePlanSchema.partial().omit({ 
+  id: true 
 });
 
 export const insertServiceAccountSchema = createInsertSchema(serviceAccounts).omit({
