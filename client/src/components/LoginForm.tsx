@@ -134,7 +134,7 @@ export default function LoginForm({
                     type="button"
                     variant="default"
                     asChild
-                    className="w-full gap-2"
+                    className="w-full gap-2 bg-[#22c900] hover:bg-[#1db300] text-white"
                     data-testid="button-whatsapp"
                   >
                     <a
