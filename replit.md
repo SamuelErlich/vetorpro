@@ -15,6 +15,15 @@ Preferred communication style: Simple, everyday language.
 **Resolution**: Successfully migrated to boolean type via automated migration script. All code updated to use proper boolean comparisons.
 **Validation**: Admin access controls tested and confirmed working correctly.
 
+### Session Validation Security Fix
+**Issue**: User status was only validated during login, allowing blocked users to continue accessing the system until their session expired.
+**Resolution**: Enhanced `requireAuth` middleware to validate user status on every authenticated request. Sessions are now immediately destroyed when users are blocked or set as inactive.
+**Features**:
+- Real-time status validation on every request
+- Automatic session destruction for BLOQUEADO/INATIVO users
+- Admins can continue accessing even with non-ATIVO status
+**Validation**: Tested and confirmed immediate access revocation works correctly.
+
 ## System Architecture
 
 ### Frontend
