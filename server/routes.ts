@@ -59,12 +59,49 @@ declare module 'express-session' {
   }
 }
 
-// Middleware to check if user is authenticated
-const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+// Middleware to check if user is authenticated and has valid status
+const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Não autenticado" });
   }
-  next();
+  
+  try {
+    // Fetch user to check current status
+    const user = await storage.getUser(req.session.userId);
+    
+    if (!user) {
+      // User doesn't exist, destroy session
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: "Sessão inválida" });
+    }
+    
+    // Check if non-admin user is blocked or inactive
+    if (!user.isAdmin && user.status !== "ATIVO") {
+      // Destroy session for blocked/inactive non-admin users
+      req.session.destroy(() => {});
+      
+      if (user.status === "BLOQUEADO") {
+        return res.status(403).json({ 
+          error: "Conta bloqueada. Entre em contato com o suporte via WhatsApp.",
+          blocked: true,
+          status: user.status
+        });
+      } else {
+        return res.status(403).json({ 
+          error: "Acesso negado. Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
+          inactive: true,
+          status: user.status
+        });
+      }
+    }
+    
+    // Attach user to request for use in next middleware/route
+    (req as any).user = user;
+    next();
+  } catch (error) {
+    console.error("Error checking user authentication and status:", error);
+    return res.status(500).json({ error: "Erro ao verificar autenticação" });
+  }
 };
 
 // Enhanced middleware to check if user is authenticated AND active
@@ -98,11 +135,45 @@ const requireActiveAuth = async (req: Request, res: Response, next: NextFunction
 };
 
 // Middleware to check if user is admin
-const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session.userId || !req.session.isAdmin) {
-    return res.status(403).json({ error: "Acesso negado" });
+const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Não autenticado" });
   }
-  next();
+  
+  try {
+    // Fetch user to verify admin status
+    const user = await storage.getUser(req.session.userId);
+    
+    if (!user) {
+      // User doesn't exist, destroy session
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: "Sessão inválida" });
+    }
+    
+    // Check if user is actually an admin
+    if (!user.isAdmin) {
+      return res.status(403).json({ error: "Acesso negado" });
+    }
+    
+    // Even if admin, check if blocked (rare but possible)
+    if (user.status === "BLOQUEADO") {
+      req.session.destroy(() => {});
+      return res.status(403).json({ 
+        error: "Conta bloqueada. Entre em contato com o suporte.",
+        blocked: true,
+        status: user.status
+      });
+    }
+    
+    // Attach user to request
+    (req as any).user = user;
+    // Also maintain backward compatibility with session.isAdmin
+    req.session.isAdmin = true;
+    next();
+  } catch (error) {
+    console.error("Error checking admin authentication:", error);
+    return res.status(500).json({ error: "Erro ao verificar autenticação de admin" });
+  }
 };
 
 // Middleware to check user status (for protecting routes from blocked users)
