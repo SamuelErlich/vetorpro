@@ -105,6 +105,37 @@ const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
+// Middleware to check user status (for protecting routes from blocked users)
+const checkUserStatus = async (req: Request, res: Response, next: NextFunction) => {
+  // If no session, let other middlewares handle it
+  if (!req.session?.userId) return next();
+  
+  try {
+    const user = await storage.getUser(req.session.userId);
+    if (!user) {
+      req.session.destroy(() => {});
+      return res.status(401).json({ error: "Sessão inválida" });
+    }
+    
+    // If user is BLOQUEADO, destroy session and deny access
+    if (user.status === "BLOQUEADO") {
+      req.session.destroy(() => {});
+      return res.status(403).json({ 
+        error: "Conta bloqueada. Entre em contato com o suporte via WhatsApp.",
+        blocked: true,
+        status: user.status
+      });
+    }
+    
+    // Attach user to request for use in next middleware/route
+    (req as any).user = user;
+    next();
+  } catch (error) {
+    console.error("Error checking user status:", error);
+    return res.status(500).json({ error: "Erro ao verificar status do usuário" });
+  }
+};
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // SECURITY: Validate webhook secret at startup (fail fast) - MANDATORY
   const webhookSecret = process.env.PUSHINPAY_WEBHOOK_SECRET;
@@ -173,7 +204,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user.status === "BLOQUEADO") {
         console.log(`🚫 [LOGIN] User ${email} is BLOQUEADO - denying access`);
         return res.status(403).json({ 
-          error: "Sua conta foi bloqueada. Entre em contato com o suporte.",
+          error: "Conta bloqueada. Entre em contato com o suporte via WhatsApp.",
           blocked: true,
           status: user.status
         });
@@ -906,7 +937,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CREDENTIAL ROUTES ==========
   
   // Get user's credentials (controlled by UserServices.status, not user.status)
-  app.get("/api/credentials", requireAuth, async (req, res) => {
+  app.get("/api/credentials", requireAuth, checkUserStatus, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const user = await storage.getUser(userId);
@@ -933,6 +964,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get credentials error:", error);
       res.status(500).json({ error: "Erro ao buscar credenciais" });
+    }
+  });
+
+  // Get credentials for a specific service - checks if user has active access
+  app.get("/api/credentials/:serviceId", requireAuth, checkUserStatus, async (req, res) => {
+    try {
+      const userId = req.session.userId!;
+      const { serviceId } = req.params;
+      
+      // Verify if the user has access to this specific service
+      const userService = await storage.getUserService(userId, serviceId);
+      
+      if (!userService || userService.status !== "ATIVO") {
+        return res.status(403).json({ 
+          error: "Você não tem acesso ativo a este serviço. Faça uma assinatura.",
+          needsSubscription: true
+        });
+      }
+      
+      // Get credentials for this user and service
+      const credentials = await storage.getCredentialsByUserAndServices(userId, [serviceId]);
+      
+      res.json({ credentials });
+    } catch (error) {
+      console.error("Get service credentials error:", error);
+      res.status(500).json({ error: "Erro ao buscar credenciais do serviço" });
     }
   });
 

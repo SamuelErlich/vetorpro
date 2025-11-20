@@ -110,8 +110,9 @@ export default function RemoveBgService() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Seu acesso está {removeBgService.status.toLowerCase()}. 
-            {removeBgService.status === "BLOQUEADO" && " Regularize seu pagamento para reativar."}
+            {removeBgService.status === "INATIVO" 
+              ? "Este serviço está inativo. Faça uma assinatura para ter acesso aos recursos."
+              : "Seu acesso está bloqueado. Regularize seu pagamento para reativar."}
           </AlertDescription>
         </Alert>
       )}

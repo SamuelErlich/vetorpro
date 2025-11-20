@@ -58,6 +58,14 @@ interface Category {
   count: number;
 }
 
+interface UserService {
+  id: string;
+  serviceId: string;
+  status: string;
+  proximoPagamento?: Date | null;
+  ultimoPagamento?: Date | null;
+}
+
 export default function Services() {
   const [selectedCategory, setSelectedCategory] = useState("Todos");
   const [searchQuery, setSearchQuery] = useState("");
@@ -74,6 +82,12 @@ export default function Services() {
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
     queryKey: ["/api/services/categories"],
     staleTime: 1000 * 60 * 5 // Cache for 5 minutes
+  });
+
+  // Fetch user services to check subscription status
+  const { data: userServices = [] } = useQuery<UserService[]>({
+    queryKey: ["/api/user-services"],
+    staleTime: 1000 * 60 // Cache for 1 minute
   });
 
   // Subscribe mutation
@@ -316,6 +330,11 @@ export default function Services() {
           {filteredServices.map((service) => {
             const IconComponent = serviceIcons[service.id] || serviceIcons.default;
             
+            // Check if user has this service
+            const userService = userServices.find(us => us.serviceId === service.id);
+            const hasService = userService !== undefined;
+            const serviceStatus = userService?.status || null;
+            
             return (
               <Card 
                 data-testid={`card-service-${service.id}`}
@@ -381,21 +400,63 @@ export default function Services() {
                     </ul>
                   )}
 
-                  <Button 
-                    data-testid={`button-subscribe-${service.id}`}
-                    className="w-full" 
-                    onClick={() => handleSubscribe(service.id)}
-                    disabled={subscribeMutation.isPending}
-                  >
-                    {subscribeMutation.isPending ? (
-                      "Processando..."
-                    ) : (
-                      <>
-                        <ShoppingCart className="h-4 w-4 mr-2" />
-                        {service.id === "removebg-001" ? "Ver Planos" : "Contratar"}
-                      </>
-                    )}
-                  </Button>
+                  {/* Show different button based on subscription status */}
+                  {hasService && serviceStatus === "ATIVO" ? (
+                    <div className="space-y-2">
+                      <Badge variant="default" className="w-full justify-center py-2">
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Serviço Ativo
+                      </Badge>
+                      <Button 
+                        data-testid={`button-manage-${service.id}`}
+                        className="w-full" 
+                        variant="outline"
+                        onClick={() => {
+                          // Navigate to service management page
+                          if (service.id === "vectorizer-001") {
+                            navigate("/services/vectorizer");
+                          } else if (service.id === "removebg-001") {
+                            navigate("/services/removebg");
+                          }
+                        }}
+                      >
+                        Gerenciar Serviço
+                      </Button>
+                    </div>
+                  ) : hasService && (serviceStatus === "INATIVO" || serviceStatus === "BLOQUEADO") ? (
+                    <div className="space-y-2">
+                      <Badge 
+                        variant="destructive" 
+                        className="w-full justify-center py-2"
+                      >
+                        {serviceStatus === "INATIVO" ? "Inativo" : "Bloqueado"}
+                      </Badge>
+                      <Button 
+                        data-testid={`button-reactivate-${service.id}`}
+                        className="w-full" 
+                        onClick={() => navigate("/payment")}
+                      >
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Reativar Serviço
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button 
+                      data-testid={`button-subscribe-${service.id}`}
+                      className="w-full" 
+                      onClick={() => handleSubscribe(service.id)}
+                      disabled={subscribeMutation.isPending}
+                    >
+                      {subscribeMutation.isPending ? (
+                        "Processando..."
+                      ) : (
+                        <>
+                          <ShoppingCart className="h-4 w-4 mr-2" />
+                          {service.id === "removebg-001" ? "Ver Planos" : "Contratar"}
+                        </>
+                      )}
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             );

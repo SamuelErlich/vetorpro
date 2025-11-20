@@ -262,15 +262,15 @@ async function blockOverdueUsers() {
           continue;
         }
 
-        // Update UserService status to PENDENTE (blocked) and clear proximoPagamento
+        // Update UserService status to BLOQUEADO and clear proximoPagamento
         const updatedUserService = await storage.updateUserService(userService.id, {
-          status: 'PENDENTE',
+          status: 'BLOQUEADO',
           proximoPagamento: null, // Clear to prevent re-processing
         });
 
         // Also update User status for compatibility
         const updatedUser = await storage.updateUser(userService.userId, {
-          status: 'PENDENTE',
+          status: 'BLOQUEADO',
           nextPaymentDate: null, // Clear to prevent re-processing
         });
 

@@ -44,8 +44,11 @@ export default function VectorizerService() {
     service => service.serviceId === "vectorizer-001"
   );
 
+  // Check if service is active
+  const hasActiveAccess = vectorizerService?.status === "ATIVO";
+
   const credentials = credentialsData?.credentials || [];
-  const isLocked = credentialsData?.locked || false;
+  const isLocked = credentialsData?.locked || false || !hasActiveAccess; // Also lock if service not active
 
   // Parse credentials data for Vectorizer only
   const vectorizerCredentials = credentials
@@ -72,8 +75,8 @@ export default function VectorizerService() {
     })
     .filter(Boolean);
 
-  // Get most recent credentials
-  const currentCredentials = vectorizerCredentials[vectorizerCredentials.length - 1];
+  // Get most recent credentials - only if service is active
+  const currentCredentials = hasActiveAccess ? vectorizerCredentials[vectorizerCredentials.length - 1] : null;
 
   const handleCopy = async (value: string, key: string) => {
     try {
@@ -183,17 +186,19 @@ export default function VectorizerService() {
             </div>
           </CardHeader>
           <CardContent>
-            {isLocked ? (
+            {!hasActiveAccess ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Lock className="h-12 w-12 text-muted-foreground/50 mb-4" />
-                <p className="font-medium mb-2">Credenciais bloqueadas</p>
+                <p className="font-medium mb-2">Serviço {vectorizerService.status === "INATIVO" ? "Inativo" : "Bloqueado"}</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Regularize seu pagamento para acessar as credenciais
+                  {vectorizerService.status === "INATIVO" 
+                    ? "Faça uma assinatura para acessar as credenciais deste serviço"
+                    : "Regularize seu pagamento para reativar o acesso"}
                 </p>
                 <Button asChild>
-                  <Link href="/payment">
+                  <Link href={vectorizerService.status === "INATIVO" ? "/services" : "/payment"}>
                     <CreditCard className="h-4 w-4 mr-2" />
-                    Pagar Agora
+                    {vectorizerService.status === "INATIVO" ? "Assinar Agora" : "Pagar Agora"}
                   </Link>
                 </Button>
               </div>
