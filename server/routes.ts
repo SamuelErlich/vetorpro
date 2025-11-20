@@ -2815,16 +2815,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { serviceId } = req.params;
       const updates = req.body;
       
-      const service = await storage.updateService(serviceId, updates);
+      // DEBUG: Log para ver o que está sendo recebido
+      console.log("🔍 [UPDATE SERVICE] Received updates:", {
+        serviceId,
+        updates,
+        updateKeys: Object.keys(updates),
+        types: Object.entries(updates).map(([k, v]) => `${k}: ${typeof v}`)
+      });
+      
+      // Filter out timestamp and id fields that shouldn't be updated
+      const processedUpdates = { ...updates };
+      delete processedUpdates.id;
+      delete processedUpdates.createdAt;
+      delete processedUpdates.created_at;
+      
+      // Garantir que preco seja string se for número
+      if (processedUpdates.preco !== undefined && typeof processedUpdates.preco === 'number') {
+        processedUpdates.preco = processedUpdates.preco.toString();
+      }
+      
+      console.log("🔄 [UPDATE SERVICE] Processed updates (filtered):", processedUpdates);
+      
+      const service = await storage.updateService(serviceId, processedUpdates);
       
       if (!service) {
+        console.error("❌ [UPDATE SERVICE] Service not found:", serviceId);
         return res.status(404).json({ error: "Serviço não encontrado" });
       }
       
+      console.log("✅ [UPDATE SERVICE] Service updated successfully:", service);
       res.json(service);
     } catch (error) {
-      console.error("Error updating service:", error);
-      res.status(500).json({ error: "Erro ao atualizar serviço" });
+      console.error("❌ [UPDATE SERVICE] Error updating service:", error);
+      console.error("Stack trace:", error.stack);
+      res.status(500).json({ error: "Erro ao atualizar serviço", details: error.message });
     }
   });
 
@@ -3021,16 +3045,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { id } = req.params;
       const updates = req.body;
       
-      const service = await storage.updateService(id, updates);
+      // DEBUG: Log para ver o que está sendo recebido
+      console.log("🔍 [UPDATE SERVICE PUT] Received updates:", {
+        serviceId: id,
+        updates,
+        updateKeys: Object.keys(updates),
+        types: Object.entries(updates).map(([k, v]) => `${k}: ${typeof v}`)
+      });
+      
+      // Filter out timestamp and id fields that shouldn't be updated
+      const processedUpdates = { ...updates };
+      delete processedUpdates.id;
+      delete processedUpdates.createdAt;
+      delete processedUpdates.created_at;
+      
+      // Garantir que preco seja string se for número
+      if (processedUpdates.preco !== undefined && typeof processedUpdates.preco === 'number') {
+        processedUpdates.preco = processedUpdates.preco.toString();
+      }
+      
+      console.log("🔄 [UPDATE SERVICE PUT] Processed updates (filtered):", processedUpdates);
+      
+      const service = await storage.updateService(id, processedUpdates);
       
       if (!service) {
+        console.error("❌ [UPDATE SERVICE PUT] Service not found:", id);
         return res.status(404).json({ error: "Serviço não encontrado" });
       }
       
+      console.log("✅ [UPDATE SERVICE PUT] Service updated successfully:", service);
       res.json(service);
     } catch (error) {
-      console.error("Error updating service:", error);
-      res.status(500).json({ error: "Erro ao atualizar serviço" });
+      console.error("❌ [UPDATE SERVICE PUT] Error updating service:", error);
+      console.error("Stack trace:", error.stack);
+      res.status(500).json({ error: "Erro ao atualizar serviço", details: error.message });
     }
   });
 
