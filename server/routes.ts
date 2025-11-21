@@ -1196,14 +1196,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get user's current status and service activation info
       const user = await storage.getUser(req.session.userId!);
       
-      // Get service activation status if payment is for a service
+      // Get service activation status - ALWAYS return explicit boolean
       let serviceActive = false;
       let userService = null;
+      let activationPending = false;
       
+      // Always check service status if payment has a serviceId
       if (payment.serviceId) {
         const userServices = await storage.getUserServices(req.session.userId!);
         userService = userServices.find(us => us.serviceId === payment.serviceId);
-        serviceActive = userService?.status === 'ATIVO';
+        
+        if (userService) {
+          serviceActive = userService.status === 'ATIVO';
+        } else if (payment.status === 'paid') {
+          // Payment is paid but service record doesn't exist yet (webhook still processing)
+          activationPending = true;
+          console.log(`[Payment Status] Payment ${txid} is paid but service ${payment.serviceId} not yet created/activated`);
+        }
+      } else {
+        // Legacy payment without serviceId - check user status
+        serviceActive = user?.status === 'ATIVO';
       }
 
       res.json({ 
@@ -1211,10 +1223,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         amount: amountInReais, // Return formatted reais for UI (e.g., "17.50")
         amountCents: amountCents, // Return raw cents (e.g., 1750)
         createdAt: payment.createdAt,
-        // Enhanced status information
+        // Enhanced status information with explicit booleans
         userStatus: user?.status || 'INATIVO', // User's general status
-        serviceActive: serviceActive, // Whether the specific service is active
-        serviceId: payment.serviceId,
+        serviceActive: serviceActive, // ALWAYS boolean: true if service is active
+        activationPending: activationPending, // true if paid but service not yet activated
+        serviceId: payment.serviceId || null,
         nextPaymentDate: userService?.nextPaymentDate || null,
       });
     } catch (error) {

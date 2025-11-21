@@ -15,6 +15,7 @@ type PaymentStatusResponse = {
   createdAt: string;
   userStatus?: string;
   serviceActive?: boolean;
+  activationPending?: boolean;
   serviceId?: string;
   nextPaymentDate?: string | null;
 };
@@ -70,12 +71,13 @@ export default function PaymentPage() {
   useEffect(() => {
     // Check if payment is confirmed AND service is activated
     if (paymentStatus?.status === 'paid' && !paymentConfirmed) {
-      // If service is not yet active, keep polling for a bit longer
-      if (!paymentStatus.serviceActive && paymentStatus.serviceId) {
-        console.log('Payment confirmed but service not yet active, continuing to poll...');
-        return; // Continue polling until service is active
+      // CRITICAL: Only proceed if service is explicitly active (not undefined)
+      if (paymentStatus.serviceActive !== true) {
+        console.log(`Payment confirmed but service not yet active (serviceActive: ${paymentStatus.serviceActive}), continuing to poll...`);
+        return; // Continue polling until service is explicitly active
       }
       
+      console.log('Payment confirmed AND service is active! Preparing to redirect...');
       setPaymentConfirmed(true);
       toast({
         title: "Pagamento Confirmado! 🎉",
@@ -84,6 +86,7 @@ export default function PaymentPage() {
       
       // Invalidate ALL dashboard queries to ensure fresh data
       const refreshDashboardData = async () => {
+        console.log('Invalidating all dashboard queries...');
         // Wait for all invalidations to complete before redirecting
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] }),
@@ -92,10 +95,11 @@ export default function PaymentPage() {
           queryClient.invalidateQueries({ queryKey: ['/api/user-services'] }) // CRITICAL: This was missing!
         ]);
         
+        console.log('Cache invalidation complete, redirecting to dashboard...');
         // Short delay since we already confirmed service is active
         setTimeout(() => {
           setLocation('/dashboard');
-        }, 1000);
+        }, 500);
       };
       
       refreshDashboardData();
