@@ -71,16 +71,20 @@ export default function PaymentPage() {
         description: "Seu acesso foi liberado. Redirecionando...",
       });
       
-      // Invalidate relevant queries to ensure fresh data on dashboard
+      // Invalidate ALL dashboard queries to ensure fresh data
       const refreshDashboardData = async () => {
-        await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
-        await queryClient.invalidateQueries({ queryKey: ['/api/credentials'] });
-        await queryClient.invalidateQueries({ queryKey: ['/api/payments'] });
+        // Wait for all invalidations to complete before redirecting
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] }),
+          queryClient.invalidateQueries({ queryKey: ['/api/credentials'] }),
+          queryClient.invalidateQueries({ queryKey: ['/api/payments'] }),
+          queryClient.invalidateQueries({ queryKey: ['/api/user-services'] }) // CRITICAL: This was missing!
+        ]);
         
-        // Redirect after cache invalidation
+        // Small delay to ensure backend has processed the webhook
         setTimeout(() => {
           setLocation('/dashboard');
-        }, 2000);
+        }, 1500);
       };
       
       refreshDashboardData();
