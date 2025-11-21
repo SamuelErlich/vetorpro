@@ -19,7 +19,7 @@ export default function AdminLogin() {
   });
 
   useEffect(() => {
-    if (userData?.user && userData.user.isAdmin === "true") {
+    if (userData?.user && (userData.user.isAdmin === true || userData.user.isAdmin === "true")) {
       setLocation('/admin');
     }
   }, [userData, setLocation]);
