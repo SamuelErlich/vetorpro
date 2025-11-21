@@ -132,12 +132,26 @@ app.use((req, res, next) => {
     console.error("Server will continue running without automated emails.");
   }
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    console.error("Global error handler:", {
+      path: req.path,
+      method: req.method,
+      message: err?.message,
+      stack: err?.stack,
+    });
+
+    // Se outra coisa já respondeu, só loga e sai
+    if (res.headersSent) {
+      return;
+    }
+
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    res.status(status).json({ 
+      success: false,
+      error: status === 500 ? "Internal server error" : message 
+    });
   });
 
   // importantly only setup vite in development and after
