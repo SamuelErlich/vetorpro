@@ -11,6 +11,7 @@ import { manualTriggers } from "./jobs/paymentCron";
 import { sendEmail, emailTemplates } from "./utils/email";
 import { DEFAULT_SERVICE_ID } from "@shared/constants";
 import removeBgRoutes from "./routes/removebg.routes";
+import sharp from "sharp";
 
 // Rate limiters configuration - more lenient in development
 const isProduction = process.env.NODE_ENV === 'production';
@@ -1204,6 +1205,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Helper function to add padding to QR code image
+  async function addPaddingToQRCode(base64String: string, padding: number = 40): Promise<string> {
+    try {
+      // Remove data URL prefix if present
+      const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '');
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      // Add padding using Sharp
+      const paddedBuffer = await sharp(buffer)
+        .extend({
+          top: padding,
+          bottom: padding,
+          left: padding,
+          right: padding,
+          background: { r: 255, g: 255, b: 255, alpha: 1 } // White background
+        })
+        .toBuffer();
+      
+      // Return as base64 data URL
+      return `data:image/png;base64,${paddedBuffer.toString('base64')}`;
+    } catch (error) {
+      console.error("Error adding padding to QR code:", error);
+      // Return original if padding fails
+      return base64String;
+    }
+  }
+
   // Generate PIX payment (with rate limiting)
   app.post("/api/payments/pix", requireAuth, paymentsRateLimiter, async (req, res) => {
     try {
@@ -1547,6 +1575,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let qrCodeBase64 = pixData.qr_code_base64;
       if (qrCodeBase64 && !qrCodeBase64.startsWith('data:image/')) {
         qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
+      }
+      
+      // Add padding to QR code for better readability
+      if (qrCodeBase64 && !isUsingDemoMode) {
+        console.log("📐 Adding padding to QR code for better readability...");
+        qrCodeBase64 = await addPaddingToQRCode(qrCodeBase64, 50); // 50px padding on all sides
+        console.log("✅ Padding added to QR code successfully");
       }
 
       // Prepare user-friendly message based on demo mode reason
