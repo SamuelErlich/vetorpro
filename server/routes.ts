@@ -1047,10 +1047,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let senha: string;
       try {
         const data = JSON.parse(latestCredential.data);
-        email = data.usuario || data.email;
-        senha = data.senha || data.password;
+        // Try multiple field names for compatibility
+        email = data.username || data.usuario || data.email;
+        senha = data.password || data.senha;
         
         if (!email) {
+          console.error("[AUTOLOGIN] Email not found in credential data:", Object.keys(data));
           return res.status(400).json({ 
             success: false, 
             error: "Email não encontrado nas credenciais" 
@@ -1058,12 +1060,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         if (!senha) {
+          console.error("[AUTOLOGIN] Password not found in credential data:", Object.keys(data));
           return res.status(400).json({ 
             success: false, 
             error: "Senha não encontrada nas credenciais" 
           });
         }
       } catch (error) {
+        console.error("[AUTOLOGIN] Error parsing credential data:", error);
         return res.status(400).json({ 
           success: false, 
           error: "Erro ao processar credenciais" 
