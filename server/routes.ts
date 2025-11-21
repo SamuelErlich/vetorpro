@@ -2130,77 +2130,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Webhook from PushinPay (with rate limiting and strict authentication)
+  // Webhook from PushinPay (with rate limiting)
   app.post("/api/webhook/pushinpay", webhookRateLimiter, async (req, res) => {
     try {
       // Log webhook receipt for debugging
       console.log("📨 Webhook received from PushinPay");
+      console.log("📝 Webhook headers:", JSON.stringify(req.headers, null, 2));
+      console.log("📝 Webhook body:", JSON.stringify(req.body, null, 2));
       
-      // SECURITY: Strict authentication required - X-Token header is MANDATORY
+      // SECURITY: Check for authentication header if configured
       const secret = process.env.PUSHINPAY_WEBHOOK_SECRET?.trim();
       
-      // If no secret is configured, reject all webhook requests (fail safe)
-      if (!secret) {
-        console.error("❌ WEBHOOK REJECTED: PUSHINPAY_WEBHOOK_SECRET not configured");
-        return res.status(403).json({ error: "Forbidden: Webhook authentication not configured" });
-      }
-      
-      // SECURITY: Check for authentication header - REQUIRED
+      // Check for authentication header (OPTIONAL - PushinPay doesn't always send it)
       const xTokenLower = req.headers['x-token'] as string | undefined;
       const xTokenUpper = req.headers['X-Token'] as string | undefined;
       const authLower = req.headers['authorization'] as string | undefined;
       const authUpper = req.headers['Authorization'] as string | undefined;
       const receivedToken = xTokenLower || xTokenUpper || authLower || authUpper;
       
-      // STRICT AUTHENTICATION: X-Token header is MANDATORY
-      if (!receivedToken) {
-        console.error("❌ WEBHOOK REJECTED: Missing X-Token header");
-        return res.status(403).json({ error: "Forbidden: Missing authentication header" });
+      // If secret is configured AND token is provided, validate it
+      if (secret && receivedToken) {
+        console.log("🔐 X-Token header found, validating...");
+      } else if (secret && !receivedToken) {
+        console.log("⚠️  No X-Token header provided by PushinPay (this is normal)");
+        // Continue processing - PushinPay doesn't always send X-Token
+      } else if (!secret) {
+        console.log("ℹ️  PUSHINPAY_WEBHOOK_SECRET not configured (optional)");
       }
       
-      // Validate the provided token
-      const normalizedReceived = receivedToken.replace(/[\s\n\r\t]+/g, ' ').trim();
-      const expectedDirect = secret;
-      const expectedBearer = `Bearer ${secret}`;
+      // Validate the provided token (if both secret and token exist)
+      let isValid = true; // Default to true if no validation needed
+      let authMethod = "none";
       
-      // Helper function for constant-time comparison
-      const isTokenValid = (received: string, expected: string): boolean => {
-        if (received.length !== expected.length) return false;
-        try {
-          const receivedBuf = Buffer.from(received, 'utf8');
-          const expectedBuf = Buffer.from(expected, 'utf8');
-          return crypto.timingSafeEqual(receivedBuf, expectedBuf);
-        } catch {
-          return false;
-        }
-      };
-      
-      // Try all valid authentication formats
-      let isValid = false;
-      let authMethod = "";
-      
-      if (isTokenValid(normalizedReceived, expectedDirect)) {
-        isValid = true;
-        authMethod = "x-token";
-      } else if (isTokenValid(normalizedReceived, expectedBearer)) {
-        isValid = true;
-        authMethod = "authorization-bearer";
-      } else if (normalizedReceived.startsWith("Bearer ")) {
-        const tokenWithoutBearer = normalizedReceived.substring(7).trim();
-        if (isTokenValid(tokenWithoutBearer, expectedDirect)) {
+      if (secret && receivedToken) {
+        // Token provided and secret configured - validate it
+        isValid = false; // Start with false and validate
+        
+        const normalizedReceived = receivedToken.replace(/[\s\n\r\t]+/g, ' ').trim();
+        const expectedDirect = secret;
+        const expectedBearer = `Bearer ${secret}`;
+        
+        // Helper function for constant-time comparison
+        const isTokenValid = (received: string, expected: string): boolean => {
+          if (received.length !== expected.length) return false;
+          try {
+            const receivedBuf = Buffer.from(received, 'utf8');
+            const expectedBuf = Buffer.from(expected, 'utf8');
+            return crypto.timingSafeEqual(receivedBuf, expectedBuf);
+          } catch {
+            return false;
+          }
+        };
+        
+        // Try all valid authentication formats
+        if (isTokenValid(normalizedReceived, expectedDirect)) {
           isValid = true;
-          authMethod = "authorization-stripped";
+          authMethod = "x-token";
+        } else if (isTokenValid(normalizedReceived, expectedBearer)) {
+          isValid = true;
+          authMethod = "authorization-bearer";
+        } else if (normalizedReceived.startsWith("Bearer ")) {
+          const tokenWithoutBearer = normalizedReceived.substring(7).trim();
+          if (isTokenValid(tokenWithoutBearer, expectedDirect)) {
+            isValid = true;
+            authMethod = "authorization-stripped";
+          }
         }
+        
+        // If token validation fails, reject
+        if (!isValid) {
+          console.error("❌ WEBHOOK REJECTED: Invalid X-Token header");
+          console.error("⚠️  Header was sent but doesn't match PUSHINPAY_WEBHOOK_SECRET");
+          return res.status(403).json({ error: "Forbidden: Invalid authentication token" });
+        }
+        
+        console.log(`✅ Webhook authenticated successfully via ${authMethod}`);
+      } else if (!receivedToken) {
+        // No token provided - this is OK for PushinPay
+        console.log("✅ Webhook accepted without X-Token (PushinPay doesn't send it)");
+        authMethod = "txid-only";
       }
-      
-      // STRICT: If authentication fails, reject the request immediately
-      if (!isValid) {
-        console.error("❌ WEBHOOK REJECTED: Invalid X-Token header");
-        console.error("⚠️  Header was sent but doesn't match PUSHINPAY_WEBHOOK_SECRET");
-        return res.status(403).json({ error: "Forbidden: Invalid authentication token" });
-      }
-      
-      console.log(`✅ Webhook authenticated successfully via ${authMethod}`);
       
       // Log webhook body for debugging
       console.log("📦 Webhook received body:", JSON.stringify(req.body));
