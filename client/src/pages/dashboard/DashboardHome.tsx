@@ -150,15 +150,19 @@ export default function DashboardHome() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {userServices.map((service) => {
+            {userServices
+              // Filtrar apenas serviços conhecidos/válidos
+              .filter(service => 
+                service.serviceId === "vectorizer-001" || 
+                service.serviceId === "removebg-001"
+              )
+              .map((service) => {
               const isVectorizer = service.serviceId === "vectorizer-001";
               const isRemoveBG = service.serviceId === "removebg-001";
-              const serviceName = isVectorizer ? "Vectorizer" : isRemoveBG ? "RemoveBG" : "Serviço";
+              const serviceName = isVectorizer ? "Vectorizer" : "RemoveBG";
               const servicePath = isVectorizer 
                 ? "/dashboard/services/vectorizer" 
-                : isRemoveBG 
-                ? "/dashboard/services/removebg"
-                : "#";
+                : "/dashboard/services/removebg";
 
               return (
                 <div key={service.id} className="flex items-center justify-between p-4 border rounded-lg">
