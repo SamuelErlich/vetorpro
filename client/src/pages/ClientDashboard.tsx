@@ -20,24 +20,32 @@ export default function ClientDashboard() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
-  // Get current user
+  // Get current user - refetch on mount to ensure fresh data
   const { data: userData, isLoading: userLoading } = useQuery<AuthMeResponse>({
     queryKey: ['/api/auth/me'],
+    refetchOnMount: 'always', // Always refetch when component mounts
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
   });
 
-  // Get credentials
+  // Get credentials - refetch on mount for payment updates
   const { data: credentialsData, isLoading: credentialsLoading } = useQuery<CredentialsResponse>({
     queryKey: ['/api/credentials'],
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
-  // Get payments
+  // Get payments - critical for showing payment status
   const { data: paymentsData, isLoading: paymentsLoading } = useQuery<PaymentResponse[]>({
     queryKey: ['/api/payments'],
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
-  // Get user services
+  // Get user services - critical for showing active subscriptions
   const { data: userServicesData, isLoading: servicesLoading } = useQuery<UserService[]>({
     queryKey: ['/api/user-services'],
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
   });
 
   const logoutMutation = useMutation({
