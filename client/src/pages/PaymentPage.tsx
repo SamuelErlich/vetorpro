@@ -13,6 +13,10 @@ type PaymentStatusResponse = {
   status: string;
   amount: string;
   createdAt: string;
+  userStatus?: string;
+  serviceActive?: boolean;
+  serviceId?: string;
+  nextPaymentDate?: string | null;
 };
 
 export default function PaymentPage() {
@@ -64,7 +68,14 @@ export default function PaymentPage() {
   }, []);
 
   useEffect(() => {
+    // Check if payment is confirmed AND service is activated
     if (paymentStatus?.status === 'paid' && !paymentConfirmed) {
+      // If service is not yet active, keep polling for a bit longer
+      if (!paymentStatus.serviceActive && paymentStatus.serviceId) {
+        console.log('Payment confirmed but service not yet active, continuing to poll...');
+        return; // Continue polling until service is active
+      }
+      
       setPaymentConfirmed(true);
       toast({
         title: "Pagamento Confirmado! 🎉",
@@ -81,10 +92,10 @@ export default function PaymentPage() {
           queryClient.invalidateQueries({ queryKey: ['/api/user-services'] }) // CRITICAL: This was missing!
         ]);
         
-        // Small delay to ensure backend has processed the webhook
+        // Short delay since we already confirmed service is active
         setTimeout(() => {
           setLocation('/dashboard');
-        }, 1500);
+        }, 1000);
       };
       
       refreshDashboardData();

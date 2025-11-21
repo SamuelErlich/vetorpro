@@ -1173,7 +1173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Check payment status by txid (with rate limiting)
+  // Check payment status by txid with service activation info (with rate limiting)
   app.get("/api/payments/status/:txid", requireAuth, paymentsRateLimiter, async (req, res) => {
     try {
       const { txid } = req.params;
@@ -1193,11 +1193,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const amountCents = parseInt(payment.amount as string, 10);
       const amountInReais = (amountCents / 100).toFixed(2);
 
+      // Get user's current status and service activation info
+      const user = await storage.getUser(req.session.userId!);
+      
+      // Get service activation status if payment is for a service
+      let serviceActive = false;
+      let userService = null;
+      
+      if (payment.serviceId) {
+        const userServices = await storage.getUserServices(req.session.userId!);
+        userService = userServices.find(us => us.serviceId === payment.serviceId);
+        serviceActive = userService?.status === 'ATIVO';
+      }
+
       res.json({ 
         status: payment.status,
         amount: amountInReais, // Return formatted reais for UI (e.g., "17.50")
         amountCents: amountCents, // Return raw cents (e.g., 1750)
         createdAt: payment.createdAt,
+        // Enhanced status information
+        userStatus: user?.status || 'INATIVO', // User's general status
+        serviceActive: serviceActive, // Whether the specific service is active
+        serviceId: payment.serviceId,
+        nextPaymentDate: userService?.nextPaymentDate || null,
       });
     } catch (error) {
       console.error("Get payment status error:", error);
