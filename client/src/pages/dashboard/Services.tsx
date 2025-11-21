@@ -20,6 +20,7 @@ import {
   Search,
   AlertCircle,
   CheckCircle,
+  CreditCard,
   ShoppingCart,
   Layers,
   Palette

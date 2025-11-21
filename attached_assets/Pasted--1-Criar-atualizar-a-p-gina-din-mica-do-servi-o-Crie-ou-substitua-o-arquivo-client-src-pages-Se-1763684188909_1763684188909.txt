@@ -1,0 +1,177 @@
+### 1. Criar/atualizar a página dinâmica do serviço
+Crie ou substitua o arquivo:
+client/src/pages/ServicePage.tsx
+
+Com o seguinte conteúdo EXATO:
+
+------------------------------------------------------------
+import { useParams } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Copy } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+export default function ServicePage() {
+  const { id: serviceSlug } = useParams();
+  const { toast } = useToast();
+
+  const serviceQuery = useQuery({
+    queryKey: ["/api/service", serviceSlug],
+    queryFn: () => fetch(`/api/services/${serviceSlug}`).then(r => r.json()),
+  });
+
+  const credentialsQuery = useQuery({
+    queryKey: ["/api/credentials", serviceSlug],
+    queryFn: () => fetch(`/api/credentials/${serviceSlug}`).then(r => r.json()),
+  });
+
+  const service = serviceQuery.data;
+  const credentials = credentialsQuery.data;
+
+  const handleCopy = (value, label) => {
+    navigator.clipboard.writeText(value);
+    toast({
+      title: "Copiado!",
+      description: `${label} copiado`,
+    });
+  };
+
+  if (serviceQuery.isLoading || credentialsQuery.isLoading) {
+    return <p className="p-4">Carregando...</p>;
+  }
+
+  if (!service) {
+    return (
+      <div className="p-10 text-center">
+        <h2 className="text-2xl font-bold">Serviço não encontrado</h2>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto py-8 px-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-2xl">
+            {service.name} - Auto Login
+          </CardTitle>
+          <CardDescription>
+            Valor: R$ {(service.monthlyPrice / 100).toFixed(2)}/mês
+          </CardDescription>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          {credentials?.length > 0 ? (
+            credentials.map((cred) => {
+              const data = JSON.parse(cred.data);
+              return (
+                <div key={cred.id} className="space-y-4">
+                  {Object.entries(data).map(([key, value]) => (
+                    <div
+                      key={key}
+                      className="flex justify-between items-center p-3 bg-muted rounded-lg"
+                    >
+                      <span className="font-medium">{key}</span>
+                      <div className="flex items-center gap-2">
+                        <code className="px-2 py-1 bg-background rounded">
+                          {value}
+                        </code>
+                        <Button size="icon" variant="ghost" onClick={() => handleCopy(value, key)}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })
+          ) : (
+            <p>Nenhuma credencial disponível.</p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+------------------------------------------------------------
+
+
+### 2. Adicionar rota dinâmica no Router
+Abra o arquivo:
+client/src/App.tsx
+
+Adicione:
+
+import ServicePage from "@/pages/ServicePage";
+
+E dentro das rotas:
+
+<Route path="/dashboard/services/:id" component={ServicePage} />
+
+
+### 3. Criar endpoints do backend (EXATOS)
+Abra server/routes.ts e adicione:
+
+------------------------------------------------------------
+app.get("/api/services/:slug", requireAuth, async (req, res) => {
+  const { slug } = req.params;
+  const service = await storage.getServiceBySlug(slug);
+
+  if (!service) {
+    return res.status(404).json({ error: "Serviço não encontrado" });
+  }
+
+  res.json(service);
+});
+
+app.get("/api/credentials/:slug", requireAuth, async (req, res) => {
+  const { slug } = req.params;
+  const service = await storage.getServiceBySlug(slug);
+
+  if (!service) {
+    return res.status(404).json({ error: "Serviço não encontrado" });
+  }
+
+  const creds = await storage.getCredentialsByUserAndServices(
+    req.session.userId,
+    [service.id]
+  );
+
+  res.json(creds);
+});
+------------------------------------------------------------
+
+
+### 4. Ajustar botão "Acessar" nos cards de serviços
+No componente onde lista os serviços, substitua o botão por:
+
+------------------------------------------------------------
+import { Link } from "wouter";
+
+<Link href={`/dashboard/services/${service.slug}`}>
+  <button className="flex items-center gap-2 text-sm font-medium">
+    Acessar →
+  </button>
+</Link>
+------------------------------------------------------------
+
+
+### 5. IMPORTANTE — o storage precisa ter este método:
+Se ainda não existir, adicione em server/storage.ts:
+
+------------------------------------------------------------
+async getServiceBySlug(slug) {
+  return db.query.services.findFirst({
+    where: eq(services.slug, slug)
+  });
+}
+------------------------------------------------------------
+
+### FINAL
+Depois de aplicar tudo acima:
+✔ /dashboard/services/vectorizer funcionará  
+✔ A página dinâmica vai carregar as credenciais  
+✔ Qualquer novo serviço criado no painel do admin vai ter página automaticamente  
+✔ O erro 404 desaparece  
+✔ Todo o fluxo fica padronizado

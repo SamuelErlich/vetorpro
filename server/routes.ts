@@ -946,7 +946,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const enrichedServices = await Promise.all(
         userServices.map(async (us) => {
           const service = await storage.getService(us.serviceId);
-          const plan = us.planId ? await storage.getServicePlan(us.planId) : null;
+          // Only fetch plan if planId exists (for RemoveBG service)
+          let plan = null;
+          if (us.planId) {
+            try {
+              plan = await storage.getServicePlan(us.planId);
+            } catch (error) {
+              console.error(`Error fetching plan ${us.planId}:`, error);
+              plan = null;
+            }
+          }
           
           // Calculate remaining credits for services with credit system
           const remainingCredits = us.credits ? 
