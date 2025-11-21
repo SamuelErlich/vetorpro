@@ -120,7 +120,8 @@ app.use((req, res, next) => {
   await initializeData();
   
   // Migrate RemoveBG API key from environment to database
-  await migrateRemoveBgApiKey();
+  // Temporarily disabled to avoid migration conflicts during deployment
+  // await migrateRemoveBgApiKey();
   
   const server = await registerRoutes(app);
 
