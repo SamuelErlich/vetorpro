@@ -1,0 +1,72 @@
+Bug de sintaxe em getFilteredPaymentsForUser (PostgresStorage)
+
+No ./server/storage.ts tem essa função nova, com um comentário bonito explicando a regra, mas a última linha está incompilável:
+
+// ⚠️ DO JEITO QUE ESTÁ AGORA
+return [.paidPayments, .Array.from(latestPendingByService.values())];
+
+
+Isso é sintaxe inválida de JS/TS, o build vai falhar aqui.
+
+Como deve ficar
+
+A ideia (descrita nos comentários) é:
+
+pegar os 20 últimos pagamentos pagos
+
+1 pagamento pendente mais recente por serviço
+
+Então a função inteira pode ficar assim:
+
+// Dentro da classe PostgresStorage, em ./server/storage.ts
+async getFilteredPaymentsForUser(userId: string): Promise<Payment[]> {
+  // Busca todos os pagamentos do usuário
+  const allPayments = await this.getPaymentsByUserId(userId);
+
+  // 1) Últimos 20 pagos (ordenados por updatedAt ou createdAt desc)
+  const paidPayments = allPayments
+    .filter((p) => p.status === "paid")
+    .sort((a, b) => {
+      const da = (a.updatedAt ?? a.createdAt ?? new Date(0)).getTime();
+      const db = (b.updatedAt ?? b.createdAt ?? new Date(0)).getTime();
+      return db - da;
+    })
+    .slice(0, 20);
+
+  // 2) Pendentes / processando
+  const pendingOrProcessing = allPayments.filter(
+    (p) => p.status === "pending" || p.status === "processing"
+  );
+
+  // 3) Último pendente por serviceId
+  const latestPendingByService = new Map<string, Payment>();
+
+  for (const payment of pendingOrProcessing) {
+    const key = payment.serviceId ?? "default";
+    const paymentDate = payment.updatedAt ?? payment.createdAt ?? new Date(0);
+
+    const existing = latestPendingByService.get(key);
+    if (!existing) {
+      latestPendingByService.set(key, payment);
+      continue;
+    }
+
+    const existingDate =
+      existing.updatedAt ?? existing.createdAt ?? new Date(0);
+
+    if (paymentDate.getTime() > existingDate.getTime()) {
+      latestPendingByService.set(key, payment);
+    }
+  }
+
+  // 4) Junta:
+  //    - até 20 pagos
+  //    - + 1 pendente mais recente por serviço
+  return [
+    ...paidPayments,
+    ...Array.from(latestPendingByService.values()),
+  ];
+}
+
+
+Isso mantém a regra de negócio descrita no comentário, só corrige a sintaxe e deixa o código mais à prova de null / undefined.
