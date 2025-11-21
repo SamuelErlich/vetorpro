@@ -76,6 +76,17 @@ Não existe mais fallback automático para modo demo. Isso garante que:
 **Valores:** `"true"` ou não definir
 **Produção:** Não definir (usar API real)
 
+### 7. DISABLE_QR_PADDING
+**Status:** Opcional
+**Descrição:** Desabilitar a adição de margem branca ao redor do QR code PIX
+**Valores:** `"true"` para desabilitar ou não definir (padding ativado por padrão)
+**Detalhes:** 
+- Por padrão, o sistema adiciona 50px de margem branca ao redor dos QR codes PIX
+- Isso melhora a leitura por aplicativos bancários que precisam de espaço ao redor do código
+- O padding usa a biblioteca Sharp com timeout de 3 segundos
+- Em caso de falha, o QR code original é retornado (não afeta pagamentos)
+**Produção:** Geralmente não definir (manter padding ativado para melhor compatibilidade)
+
 ## ⚙️ Variáveis Auto-Configuradas
 
 As seguintes variáveis são configuradas automaticamente pelo Replit:
