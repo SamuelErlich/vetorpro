@@ -1,0 +1,77 @@
+Bug 3 – Teste cron-day6 com variável fora do escopo
+Onde está
+describe("Cron Day 6 - Payment Overdue Blocking", () => {
+  test("deve bloquear usuário com pagamento vencido e enviar email", async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const user = storage.createUser({
+      email: "overdue@example.com",
+      status: "ATIVO",
+      nextPaymentDate: yesterday,
+      isAdmin: false,
+    });
+
+    const result = await simulateDay6BlockOverdueUsers(storage, mockEmailService);
+
+    expect(user.status).toBe("BLOQUEADO");
+    ...
+  });
+
+  test("não deve bloquear admin mesmo com pagamento vencido", async () => {
+    const admin = storage.createUser({
+      email: "admin@example.com",
+      status: "ATIVO",
+      nextPaymentDate: yesterday,  // <-- AQUI
+      isAdmin: true,
+    });
+
+Problema
+
+yesterday está declarado dentro do primeiro test.
+
+No segundo test, yesterday não existe no escopo → erro de compilação/execução (ReferenceError / erro de tipo no TS).
+
+Correção
+
+Extrair a data para escopo superior:
+
+describe("Cron Day 6 - Payment Overdue Blocking", () => {
+  let yesterday: Date;
+
+  beforeEach(() => {
+    yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+  });
+
+  test("deve bloquear usuário com pagamento vencido e enviar email", async () => {
+    const user = storage.createUser({
+      email: "overdue@example.com",
+      status: "ATIVO",
+      nextPaymentDate: yesterday,
+      isAdmin: false,
+    });
+
+    const result = await simulateDay6BlockOverdueUsers(storage, mockEmailService);
+
+    expect(user.status).toBe("BLOQUEADO");
+    ...
+  });
+
+  test("não deve bloquear admin mesmo com pagamento vencido", async () => {
+    const admin = storage.createUser({
+      email: "admin@example.com",
+      status: "ATIVO",
+      nextPaymentDate: yesterday,
+      isAdmin: true,
+    });
+
+    const result = await simulateDay6BlockOverdueUsers(storage, mockEmailService);
+
+    expect(admin.status).toBe("ATIVO");
+    expect(result.blockedCount).toBe(0);
+  });
+});
+
+
+Se storage.createUser for assíncrono no seu test double, ainda precisa de await.

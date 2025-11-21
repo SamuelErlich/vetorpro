@@ -178,16 +178,23 @@ async function simulateDay6BlockOverdueUsers(
 
 describe("Cron Day 6 - Payment Overdue Blocking", () => {
   let storage: MockStorage;
+  let yesterday: Date;
+  let nextMonth: Date;
 
   beforeEach(() => {
     storage = new MockStorage();
     mockEmailService.clear();
+    
+    // Common dates for tests
+    yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    nextMonth = new Date();
+    nextMonth.setMonth(nextMonth.getMonth() + 1);
   });
 
   test("deve bloquear usuário com pagamento vencido e enviar email", async () => {
     // Create user with overdue payment (yesterday)
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
     
     const user = storage.createUser({
       email: "overdue@example.com",
@@ -221,9 +228,6 @@ describe("Cron Day 6 - Payment Overdue Blocking", () => {
 
   test("não deve bloquear usuário com pagamento futuro", async () => {
     // Create user with future payment (next month)
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-    
     const user = storage.createUser({
       email: "ontime@example.com",
       status: "ATIVO",
@@ -253,9 +257,6 @@ describe("Cron Day 6 - Payment Overdue Blocking", () => {
 
   test("não deve bloquear admin mesmo com pagamento vencido", async () => {
     // Create admin user with overdue payment
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    
     const admin = storage.createUser({
       email: "admin@example.com",
       status: "ATIVO",
@@ -285,12 +286,6 @@ describe("Cron Day 6 - Payment Overdue Blocking", () => {
 
   test("deve bloquear múltiplos usuários em um único cron", async () => {
     // Create 3 users: 2 overdue, 1 on-time
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    
-    const nextMonth = new Date();
-    nextMonth.setMonth(nextMonth.getMonth() + 1);
-
     // Overdue user 1
     const user1 = storage.createUser({
       email: "overdue1@example.com",
@@ -356,9 +351,6 @@ describe("Cron Day 6 - Payment Overdue Blocking", () => {
   });
 
   test("deve atualizar tanto Users quanto UserServices", async () => {
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    
     const user = storage.createUser({
       email: "overdue@example.com",
       status: "ATIVO",
