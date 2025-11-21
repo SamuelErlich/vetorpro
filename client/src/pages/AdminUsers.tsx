@@ -43,7 +43,7 @@ export default function AdminUsers() {
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
-    if (!authLoading && (!currentUser?.user || !currentUser.user.isAdmin)) {
+    if (!authLoading && (!currentUser?.user || currentUser.user.isAdmin !== "true")) {
       setLocation('/admin/login');
     }
   }, [currentUser, authLoading, setLocation]);
@@ -63,7 +63,7 @@ export default function AdminUsers() {
       if (!res.ok) throw new Error("Failed to fetch users");
       return res.json();
     },
-    enabled: !!currentUser?.user && currentUser.user.isAdmin,
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
   // Mutation for updating user service

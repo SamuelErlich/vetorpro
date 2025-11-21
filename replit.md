@@ -8,22 +8,6 @@ This project is a web application designed for comprehensive user credential man
 
 Preferred communication style: Simple, everyday language.
 
-## Recent Security Updates (November 2025)
-
-### Critical Security Fix: isAdmin Field Type
-**Issue**: The `isAdmin` field was previously stored as text ("true"/"false") instead of boolean, creating a critical security vulnerability since the string "false" is truthy in JavaScript.
-**Resolution**: Successfully migrated to boolean type via automated migration script. All code updated to use proper boolean comparisons.
-**Validation**: Admin access controls tested and confirmed working correctly.
-
-### Session Validation Security Fix
-**Issue**: User status was only validated during login, allowing blocked users to continue accessing the system until their session expired.
-**Resolution**: Enhanced `requireAuth` middleware to validate user status on every authenticated request. Sessions are now immediately destroyed when users are blocked or set as inactive.
-**Features**:
-- Real-time status validation on every request
-- Automatic session destruction for BLOQUEADO/INATIVO users
-- Admins can continue accessing even with non-ATIVO status
-**Validation**: Tested and confirmed immediate access revocation works correctly.
-
 ## System Architecture
 
 ### Frontend

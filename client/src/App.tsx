@@ -9,10 +9,9 @@ import AdminLogin from "@/pages/AdminLogin";
 import AdminUsers from "@/pages/AdminUsers";
 import AdminServiceDetails from "@/pages/AdminServiceDetails";
 import AdminRemoveBgTokens from "@/pages/AdminRemoveBgTokens";
-import ClientDashboardV2 from "@/pages/ClientDashboardV2";
+import ClientDashboard from "@/pages/ClientDashboard";
 import ClientLogin from "@/pages/ClientLogin";
 import RemoveBgPlans from "@/pages/RemoveBgPlans";
-import RemoveBgPage from "@/pages/RemoveBgPage";
 import CriarSenha from "@/pages/CriarSenha";
 import NotFound from "@/pages/not-found";
 import PaymentPage from "@/pages/PaymentPage";
@@ -22,19 +21,13 @@ function Router() {
     <Switch>
       <Route path="/" component={ClientLogin} />
       <Route path="/admin/login" component={AdminLogin} />
-      {/* Client Dashboard with nested routes */}
-      <Route path="/dashboard" component={ClientDashboardV2} />
-      <Route path="/dashboard/:rest*" component={ClientDashboardV2} />
-      <Route path="/services" component={ClientDashboardV2} />
-      <Route path="/payments" component={ClientDashboardV2} />
-      <Route path="/account" component={ClientDashboardV2} />
+      <Route path="/dashboard" component={ClientDashboard} />
       <Route path="/admin" component={AdminDashboard} />
       <Route path="/admin/users" component={AdminUsers} />
       <Route path="/admin/services/:serviceId" component={AdminServiceDetails} />
       <Route path="/admin/removebg-tokens" component={AdminRemoveBgTokens} />
       <Route path="/payment" component={PaymentPage} />
       <Route path="/removebg/plans" component={RemoveBgPlans} />
-      <Route path="/removebg" component={RemoveBgPage} />
       <Route path="/criar-senha" component={CriarSenha} />
       <Route component={NotFound} />
     </Switch>

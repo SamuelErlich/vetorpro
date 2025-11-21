@@ -17,10 +17,6 @@ import {
   type InsertRemoveBgPlan,
   type RemoveBgApiKey,
   type InsertRemoveBgApiKey,
-  type ServicePlan,
-  type InsertServicePlan,
-  type Category,
-  type InsertCategory,
   users,
   services,
   userServices,
@@ -29,9 +25,7 @@ import {
   passwordResets,
   removeBgUsage,
   removeBgPlans,
-  removeBgApiKeys,
-  servicePlans,
-  categories
+  removeBgApiKeys
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { drizzle } from "drizzle-orm/neon-http";
@@ -66,7 +60,6 @@ export interface IStorage {
   getUserService(userId: string, serviceId: string): Promise<UserService | undefined>;
   getUserServices(userId: string): Promise<UserService[]>;
   getUserServicesByServiceId(serviceId: string): Promise<UserService[]>;
-  getUserServicesWithDetails(userId: string): Promise<UserService[]>;
   createUserService(userService: InsertUserService): Promise<UserService>;
   updateUserService(id: string, userService: Partial<UserService>): Promise<UserService | undefined>;
   updateUserServicePlan(userId: string, serviceId: string, planId: string | null, credits: number): Promise<UserService | undefined>;
@@ -94,10 +87,6 @@ export interface IStorage {
   deletePayment(id: string): Promise<boolean>;
   getPaymentByTxid(txid: string): Promise<Payment | undefined>;
   getPaymentByPushinpayId(pushinpayId: string): Promise<Payment | undefined>;
-  markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId?: string): Promise<void>;
-  getRecentPendingPayment(userId: string, serviceId: string, timeWindowMs: number): Promise<Payment | undefined>;
-  expireOldPendingPayments(userId: string, serviceId: string): Promise<void>;
-  expireAllOldPendingPayments(timeWindowMs: number): Promise<void>;
   
   // Password Resets
   createPasswordReset(reset: InsertPasswordReset): Promise<PasswordReset>;
@@ -127,21 +116,6 @@ export interface IStorage {
   activateRemoveBgApiKey(id: string): Promise<RemoveBgApiKey | undefined>;
   deleteRemoveBgApiKey(id: string): Promise<boolean>;
   getActiveRemoveBgApiKey(): Promise<RemoveBgApiKey | undefined>;
-  
-  // Service Plans
-  getServicePlan(id: string): Promise<ServicePlan | undefined>;
-  getServicePlansByServiceId(serviceId: string): Promise<ServicePlan[]>;
-  getAllServicePlans(): Promise<ServicePlan[]>;
-  createServicePlan(plan: InsertServicePlan): Promise<ServicePlan>;
-  updateServicePlan(id: string, updates: Partial<ServicePlan>): Promise<ServicePlan | undefined>;
-  deleteServicePlan(id: string): Promise<boolean>;
-  
-  // Categories
-  getCategory(id: string): Promise<Category | undefined>;
-  getAllCategories(): Promise<Category[]>;
-  createCategory(category: InsertCategory): Promise<Category>;
-  updateCategory(id: string, updates: Partial<Category>): Promise<Category | undefined>;
-  deleteCategory(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -154,8 +128,6 @@ export class MemStorage implements IStorage {
   private removeBgUsage: Map<string, RemoveBgUsage>;
   private removeBgPlans: Map<string, RemoveBgPlan>;
   private removeBgApiKeys: Map<string, RemoveBgApiKey>;
-  private servicePlans: Map<string, ServicePlan>;
-  private categories: Map<string, Category>;
 
   constructor() {
     this.users = new Map();
@@ -167,8 +139,6 @@ export class MemStorage implements IStorage {
     this.removeBgUsage = new Map();
     this.removeBgPlans = new Map();
     this.removeBgApiKeys = new Map();
-    this.servicePlans = new Map();
-    this.categories = new Map();
   }
 
   // Users
@@ -230,7 +200,7 @@ export class MemStorage implements IStorage {
       email: insertUser.email,
       password: insertUser.password || null,
       status: insertUser.status || "INATIVO",
-      isAdmin: insertUser.isAdmin || false,
+      isAdmin: insertUser.isAdmin || "false",
       discount: insertUser.discount || 0,
       id,
       ultimoPagamento: null,
@@ -414,12 +384,6 @@ export class MemStorage implements IStorage {
   async getUserServicesByServiceId(serviceId: string): Promise<UserService[]> {
     return Array.from(this.userServices.values()).filter(
       (us) => us.serviceId === serviceId,
-    );
-  }
-
-  async getUserServicesWithDetails(userId: string): Promise<UserService[]> {
-    return Array.from(this.userServices.values()).filter(
-      (us) => us.userId === userId,
     );
   }
 
@@ -634,56 +598,6 @@ export class MemStorage implements IStorage {
     );
   }
 
-  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId?: string): Promise<void> {
-    // Mark all pending payments for this user and service as expired, except the excludeId
-    Array.from(this.payments.values()).forEach(payment => {
-      if (payment.userId === userId && 
-          payment.serviceId === serviceId && 
-          (!excludeId || payment.id !== excludeId) && 
-          payment.status === "pending") {
-        payment.status = "canceled_by_system";
-      }
-    });
-  }
-
-  async getRecentPendingPayment(userId: string, serviceId: string, timeWindowMs: number): Promise<Payment | undefined> {
-    const cutoffTime = new Date(Date.now() - timeWindowMs);
-    
-    const recentPayments = Array.from(this.payments.values())
-      .filter(payment => 
-        payment.userId === userId &&
-        payment.serviceId === serviceId &&
-        payment.status === "pending" &&
-        payment.createdAt >= cutoffTime
-      )
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    
-    return recentPayments[0] || undefined;
-  }
-
-  async expireOldPendingPayments(userId: string, serviceId: string): Promise<void> {
-    const cutoffTime = new Date(Date.now() - 60 * 60 * 1000); // 1 hour
-    
-    Array.from(this.payments.values()).forEach(payment => {
-      if (payment.userId === userId && 
-          payment.serviceId === serviceId && 
-          payment.status === "pending" &&
-          payment.createdAt < cutoffTime) {
-        payment.status = "expired";
-      }
-    });
-  }
-
-  async expireAllOldPendingPayments(timeWindowMs: number): Promise<void> {
-    const cutoffTime = new Date(Date.now() - timeWindowMs);
-    
-    Array.from(this.payments.values()).forEach(payment => {
-      if (payment.status === "pending" && payment.createdAt < cutoffTime) {
-        payment.status = "expired";
-      }
-    });
-  }
-
   // Password Resets
   async createPasswordReset(insertReset: InsertPasswordReset): Promise<PasswordReset> {
     const id = randomUUID();
@@ -887,125 +801,6 @@ export class MemStorage implements IStorage {
 
   async getActiveRemoveBgApiKey(): Promise<RemoveBgApiKey | undefined> {
     return Array.from(this.removeBgApiKeys.values()).find(key => key.isActive);
-  }
-
-  // Service Plans
-  async getServicePlan(id: string): Promise<ServicePlan | undefined> {
-    return this.servicePlans.get(id);
-  }
-
-  async getServicePlansByServiceId(serviceId: string): Promise<ServicePlan[]> {
-    return Array.from(this.servicePlans.values())
-      .filter(plan => plan.serviceId === serviceId)
-      .filter(plan => plan.isActive)
-      .sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
-  }
-
-  async getAllServicePlans(): Promise<ServicePlan[]> {
-    return Array.from(this.servicePlans.values());
-  }
-
-  async createServicePlan(plan: InsertServicePlan): Promise<ServicePlan> {
-    const id = randomUUID();
-    const now = new Date();
-    const servicePlan: ServicePlan = {
-      id,
-      serviceId: plan.serviceId,
-      name: plan.name,
-      description: plan.description || null,
-      price: plan.price,
-      billingCycle: plan.billingCycle || "monthly",
-      features: plan.features || null,
-      isActive: plan.isActive !== undefined ? plan.isActive : true,
-      maxUsers: plan.maxUsers || null,
-      storageLimit: plan.storageLimit || null,
-      apiCallsLimit: plan.apiCallsLimit || null,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.servicePlans.set(id, servicePlan);
-    return servicePlan;
-  }
-
-  async updateServicePlan(id: string, updates: Partial<ServicePlan>): Promise<ServicePlan | undefined> {
-    const plan = this.servicePlans.get(id);
-    if (!plan) return undefined;
-    
-    const updatedPlan: ServicePlan = {
-      ...plan,
-      ...updates,
-      id: plan.id, // Preserve the ID
-      updatedAt: new Date(),
-    };
-    this.servicePlans.set(id, updatedPlan);
-    return updatedPlan;
-  }
-
-  async deleteServicePlan(id: string): Promise<boolean> {
-    // Soft delete - just mark as inactive
-    const plan = this.servicePlans.get(id);
-    if (!plan) return false;
-    
-    plan.isActive = false;
-    plan.updatedAt = new Date();
-    this.servicePlans.set(id, plan);
-    return true;
-  }
-
-  // Categories
-  async getCategory(id: string): Promise<Category | undefined> {
-    return this.categories.get(id);
-  }
-
-  async getAllCategories(): Promise<Category[]> {
-    return Array.from(this.categories.values())
-      .filter(cat => cat.isActive)
-      .sort((a, b) => a.displayOrder - b.displayOrder);
-  }
-
-  async createCategory(category: InsertCategory): Promise<Category> {
-    const id = randomUUID();
-    const now = new Date();
-    const newCategory: Category = {
-      id,
-      name: category.name,
-      slug: category.slug,
-      description: category.description || null,
-      icon: category.icon || null,
-      displayOrder: category.displayOrder || 0,
-      isActive: category.isActive !== undefined ? category.isActive : true,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.categories.set(id, newCategory);
-    return newCategory;
-  }
-
-  async updateCategory(id: string, updates: Partial<Category>): Promise<Category | undefined> {
-    const category = this.categories.get(id);
-    if (!category) return undefined;
-    
-    const updatedCategory: Category = {
-      ...category,
-      ...updates,
-      id: category.id, // Preserve the ID
-      updatedAt: new Date(),
-    };
-    this.categories.set(id, updatedCategory);
-    return updatedCategory;
-  }
-
-  async deleteCategory(id: string): Promise<boolean> {
-    // Check if there are services using this category
-    const servicesWithCategory = Array.from(this.services.values())
-      .filter(service => (service as any).categoryId === id);
-    
-    if (servicesWithCategory.length > 0) {
-      // Can't delete if services are using this category
-      return false;
-    }
-    
-    return this.categories.delete(id);
   }
 }
 
@@ -1243,10 +1038,6 @@ class PostgresStorage implements IStorage {
 
   async getUserServicesByServiceId(serviceId: string): Promise<UserService[]> {
     return await this.db.select().from(userServices).where(eq(userServices.serviceId, serviceId));
-  }
-
-  async getUserServicesWithDetails(userId: string): Promise<UserService[]> {
-    return await this.db.select().from(userServices).where(eq(userServices.userId, userId));
   }
 
   async createUserService(insertUserService: InsertUserService): Promise<UserService> {
@@ -1514,64 +1305,6 @@ class PostgresStorage implements IStorage {
     return result[0];
   }
 
-  async markOldPendingPaymentsAsExpired(userId: string, serviceId: string, excludeId?: string): Promise<void> {
-    // Mark all pending payments for this user and service as expired, except the excludeId
-    const conditions = [
-      eq(payments.userId, userId),
-      eq(payments.serviceId, serviceId),
-      eq(payments.status, "pending")
-    ];
-    
-    if (excludeId) {
-      conditions.push(sql`${payments.id} != ${excludeId}`);
-    }
-    
-    await this.db.update(payments)
-      .set({ status: "canceled_by_system" })
-      .where(and(...conditions));
-  }
-
-  async getRecentPendingPayment(userId: string, serviceId: string, timeWindowMs: number): Promise<Payment | undefined> {
-    const cutoffTime = new Date(Date.now() - timeWindowMs);
-    
-    const result = await this.db.select()
-      .from(payments)
-      .where(and(
-        eq(payments.userId, userId),
-        eq(payments.serviceId, serviceId),
-        eq(payments.status, "pending"),
-        sql`${payments.createdAt} >= ${cutoffTime}`
-      ))
-      .orderBy(desc(payments.createdAt))
-      .limit(1);
-    
-    return result[0];
-  }
-
-  async expireOldPendingPayments(userId: string, serviceId: string): Promise<void> {
-    const cutoffTime = new Date(Date.now() - 60 * 60 * 1000); // 1 hour
-    
-    await this.db.update(payments)
-      .set({ status: "expired" })
-      .where(and(
-        eq(payments.userId, userId),
-        eq(payments.serviceId, serviceId),
-        eq(payments.status, "pending"),
-        sql`${payments.createdAt} < ${cutoffTime}`
-      ));
-  }
-
-  async expireAllOldPendingPayments(timeWindowMs: number): Promise<void> {
-    const cutoffTime = new Date(Date.now() - timeWindowMs);
-    
-    await this.db.update(payments)
-      .set({ status: "expired" })
-      .where(and(
-        eq(payments.status, "pending"),
-        sql`${payments.createdAt} < ${cutoffTime}`
-      ));
-  }
-
   // Password Resets
   async createPasswordReset(insertReset: InsertPasswordReset): Promise<PasswordReset> {
     const result = await this.db.insert(passwordResets).values(insertReset).returning();
@@ -1765,121 +1498,6 @@ class PostgresStorage implements IStorage {
     }
     
     return result[0];
-  }
-
-  // Service Plans
-  async getServicePlan(id: string): Promise<ServicePlan | undefined> {
-    const result = await this.db.select().from(servicePlans).where(eq(servicePlans.id, id));
-    return result[0];
-  }
-
-  async getServicePlansByServiceId(serviceId: string): Promise<ServicePlan[]> {
-    return await this.db.select()
-      .from(servicePlans)
-      .where(and(
-        eq(servicePlans.serviceId, serviceId),
-        eq(servicePlans.isActive, true)
-      ))
-      .orderBy(asc(servicePlans.price));
-  }
-
-  async getAllServicePlans(): Promise<ServicePlan[]> {
-    return await this.db.select().from(servicePlans);
-  }
-
-  async createServicePlan(plan: InsertServicePlan): Promise<ServicePlan> {
-    // Validate that service exists
-    const service = await this.getService(plan.serviceId);
-    if (!service) {
-      throw new Error(`Service with id ${plan.serviceId} does not exist`);
-    }
-    
-    const result = await this.db.insert(servicePlans).values({
-      ...plan,
-      features: typeof plan.features === 'string' ? plan.features : JSON.stringify(plan.features || []),
-    }).returning();
-    return result[0];
-  }
-
-  async updateServicePlan(id: string, updates: Partial<ServicePlan>): Promise<ServicePlan | undefined> {
-    const { id: _, createdAt, ...updateData } = updates;
-    
-    const processedUpdates = {
-      ...updateData,
-      features: updates.features !== undefined ? 
-        (typeof updates.features === 'string' ? updates.features : JSON.stringify(updates.features)) : 
-        undefined,
-      updatedAt: new Date(),
-    };
-    
-    const result = await this.db.update(servicePlans)
-      .set(processedUpdates)
-      .where(eq(servicePlans.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteServicePlan(id: string): Promise<boolean> {
-    // Soft delete - just mark as inactive
-    const result = await this.db.update(servicePlans)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(servicePlans.id, id))
-      .returning();
-    return result.length > 0;
-  }
-
-  // Categories
-  async getCategory(id: string): Promise<Category | undefined> {
-    const result = await this.db.select().from(categories).where(eq(categories.id, id));
-    return result[0];
-  }
-
-  async getAllCategories(): Promise<Category[]> {
-    return await this.db.select()
-      .from(categories)
-      .where(eq(categories.isActive, true))
-      .orderBy(asc(categories.displayOrder));
-  }
-
-  async createCategory(category: InsertCategory): Promise<Category> {
-    // Check if slug is unique
-    const existing = await this.db.select().from(categories)
-      .where(eq(categories.slug, category.slug));
-    
-    if (existing.length > 0) {
-      throw new Error(`Category with slug ${category.slug} already exists`);
-    }
-    
-    const result = await this.db.insert(categories).values(category).returning();
-    return result[0];
-  }
-
-  async updateCategory(id: string, updates: Partial<Category>): Promise<Category | undefined> {
-    const { id: _, createdAt, ...updateData } = updates;
-    
-    const result = await this.db.update(categories)
-      .set({ ...updateData, updatedAt: new Date() })
-      .where(eq(categories.id, id))
-      .returning();
-    return result[0];
-  }
-
-  async deleteCategory(id: string): Promise<boolean> {
-    // Check if there are services using this category
-    // Note: For now checking services table, but might need to check servicesV2 depending on usage
-    const servicesWithCategory = await this.db.select()
-      .from(services)
-      .where(eq(services.id, id)) // This might need adjustment based on actual relationship
-      .limit(1);
-    
-    if (servicesWithCategory.length > 0) {
-      return false; // Can't delete if services are using this category
-    }
-    
-    const result = await this.db.delete(categories)
-      .where(eq(categories.id, id))
-      .returning();
-    return result.length > 0;
   }
 }
 

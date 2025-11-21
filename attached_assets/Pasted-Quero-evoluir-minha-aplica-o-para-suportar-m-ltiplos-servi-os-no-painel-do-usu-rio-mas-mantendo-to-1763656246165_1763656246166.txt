@@ -1,69 +1,0 @@
-Quero evoluir minha aplicação para suportar múltiplos serviços no painel do usuário, mas mantendo toda a estrutura atual, toda a lógica atual e a mesma base de dados que você criou anteriormente com Services, UserServices, Payments e Credentials.
-Agora quero ativar de forma controlada o suporte a múltiplos serviços, com total gerenciamento via painel admin, parecido com WordPress/WHMCS.
-Objetivo: Criar um “Admin de Serviços” onde eu posso adicionar, editar, excluir e ativar/desativar serviços. O painel do usuário deve exibir automaticamente os serviços cadastrados, sem necessidade de alterar código manualmente a cada novo serviço.
-Regras importantes: Não alterar nenhum fluxo de pagamento já existente. Não remover funcionalidade atual. Não quebrar compatibilidade com serviceId = 1. Não alterar o funcionamento atual para quem usa o Vectorizer. Toda a UI atual deve continuar familiar ao usuário. O novo sistema deve ser adicionado de forma modular e sem impacto negativo.
-Implementações necessárias:
-1. Admin: Gerenciador de Serviços Criar uma seção no painel admin chamada “Serviços” com as funcionalidades:
-* listar serviços
-* criar novo serviço
-* editar serviço
-* ativar/desativar serviço
-* definir preço
-* definir descrição
-* definir imagem/icone
-* definir cor/tema individual
-* definir tipo (COMPARTILHADO ou INDIVIDUAL)
-* definir limite de usuários (se COMPARTILHADO)
-* definir se permite deep-link
-* definir instruções para o usuário (campo texto longo)
-O admin deve ter CRUD completo usando a tabela Services.
-1. Tipos de Serviço Implementar na tabela Services um campo tipo: tipo: COMPARTILHADO | INDIVIDUAL
-Regras: COMPARTILHADO → o serviço funciona igual ao Vectorizer INDIVIDUAL → o usuário precisa de credenciais próprias, não compartilhadas
-1. Exibição dinâmica no painel do usuário O painel do usuário deve exibir automaticamente todos os serviços ativos cadastrados no banco.
-Cada serviço deve aparecer como um “card” ou bloco com:
-* nome
-* descrição breve
-* botão “Assinar” se não estiver ativo
-* botão “Acessar” se estiver ATIVO
-* botão “Renovar assinatura” se estiver perto da data de pagamento
-* destaque automático se estiver próximo do vencimento
-* status visual claro: ATIVO, INATIVO, BLOQUEADO
-* valor do serviço
-* imagem/icone
-* cor personalizada
-Importante: Usuário só deve ver serviços ativos no banco. Usuário deve continuar vendo o Vectorizer normalmente como hoje.
-1. Lógica de assinatura Quando o usuário clicar em “Assinar”, o sistema deve:
-* gerar PIX para serviceId correspondente
-* criar ou atualizar UserService
-* seguir o mesmo fluxo de pagamento atual
-* funções de cron devem passar a trabalhar por serviceId
-1. Lógica de acesso Se serviço for COMPARTILHADO:
-* exibir credenciais compartilhadas armazenadas em Credentials com serviceId correspondente
-Se INDIVIDUAL:
-* no futuro, permitir anexar credenciais por usuário (UserCredentials)
-* por enquanto, deixar pronto mas não ativado
-1. Credenciais Atualizar painel admin para permitir cadastrar credenciais por serviceId.
-2. Painel Admin: Relatórios Criar em Admin > Usuários filtros novos:
-* filtrar por serviceId
-* exportar assinantes por serviço
-* exibir total de assinantes por serviço
-* exibir usuários por status (ATIVO/INATIVO/BLOQUEADO) por serviço
-1. Painel Admin: Dashboard geral Criar novo dashboard interno (não público) com métricas:
-* faturamento por serviço
-* número de assinaturas ativas
-* serviços mais usados
-* serviços com maior retenção
-* usuários bloqueados por serviço
-* histórico de pagamentos por serviço
-1. Compatibilidade Nada deve quebrar. O fluxo atual do Vectorizer deve continuar idêntico. Toda rota existente deve continuar funcionando. serviceId deve continuar padrão = 1 se não for informado.
-2. Liberdade de implementação Você pode decidir a melhor organização de:
-* migrations
-* rotas admin
-* componentes React
-* abstrações internas
-* funções auxiliares
-* camadas de service/repository/controller
-Desde que:
-* mantenha compatibilidade absoluta com o sistema atual
-* não quebre o fluxo antigo
-* não exija mudança no frontend atual além dos novos cards de serviço

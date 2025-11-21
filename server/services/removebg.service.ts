@@ -216,7 +216,7 @@ export class RemoveBgService {
       
       for (const record of toDelete) {
         await this.deleteImages(record.originalImagePath, record.imagePath);
-        await storage.deleteRemoveBgUsageByIds([record.id]);
+        await storage.deleteRemoveBgUsageById(record.id);
       }
       
       console.log(`🧹 Cleaned up ${toDelete.length} old image(s) for user ${userId} to maintain 30-image limit`);

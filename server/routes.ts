@@ -59,122 +59,51 @@ declare module 'express-session' {
   }
 }
 
-// Middleware to check if user is authenticated (allows ATIVO and INATIVO, blocks BLOQUEADO)
-const requireAuth = async (req: Request, res: Response, next: NextFunction) => {
+// Middleware to check if user is authenticated
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Não autenticado" });
   }
-  
-  try {
-    // Fetch user to check if exists
-    const user = await storage.getUser(req.session.userId);
-    
-    if (!user) {
-      // User doesn't exist, destroy session
-      req.session.destroy(() => {});
-      return res.status(401).json({ error: "Sessão inválida" });
-    }
-    
-    // CRITICAL: Block BLOQUEADO users immediately, destroy session
-    if (user.status === "BLOQUEADO") {
-      req.session.destroy(() => {});
-      return res.status(403).json({ 
-        error: "Conta bloqueada por falta de pagamento. Entre em contato com o suporte.",
-        blocked: true,
-        status: user.status 
-      });
-    }
-    
-    // Attach user to request for use in next middleware/route
-    // Allow ATIVO and INATIVO to proceed (INATIVO needs to generate PIX)
-    (req as any).user = user;
-    next();
-  } catch (error) {
-    console.error("Error checking user authentication:", error);
-    return res.status(500).json({ error: "Erro ao verificar autenticação" });
-  }
-};
-
-// Middleware to check if user has ACTIVE status (must be used AFTER requireAuth)
-const requireActiveUser = async (req: Request, res: Response, next: NextFunction) => {
-  const user = (req as any).user;
-  
-  if (!user) {
-    return res.status(500).json({ error: "Usuário não carregado na sessão. Use requireAuth primeiro." });
-  }
-  
-  // Admins can access even if not ATIVO
-  if (user.isAdmin) {
-    return next();
-  }
-  
-  // Check if non-admin user status is ATIVO
-  if (user.status !== "ATIVO") {
-    if (user.status === "BLOQUEADO") {
-      // Destroy session for blocked users
-      req.session.destroy(() => {});
-      return res.status(403).json({ 
-        error: "Conta bloqueada por falta de pagamento. Entre em contato com o suporte.",
-        blocked: true,
-        status: user.status 
-      });
-    } else {
-      // User is INATIVO or PENDENTE
-      return res.status(403).json({ 
-        error: "Conta inativa. Realize o pagamento para acessar este recurso.",
-        inactive: true,
-        status: user.status
-      });
-    }
-  }
-  
-  // User is ATIVO, proceed
   next();
 };
 
-// Middleware to check if user is admin
-const requireAdmin = async (req: Request, res: Response, next: NextFunction) => {
+// Enhanced middleware to check if user is authenticated AND active
+const requireActiveAuth = async (req: Request, res: Response, next: NextFunction) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Não autenticado" });
   }
   
   try {
-    // Fetch user to verify admin status
     const user = await storage.getUser(req.session.userId);
-    
     if (!user) {
-      // User doesn't exist, destroy session
-      req.session.destroy(() => {});
-      return res.status(401).json({ error: "Sessão inválida" });
+      return res.status(401).json({ error: "Usuário não encontrado" });
     }
     
-    // Check if user is actually an admin
-    if (!user.isAdmin) {
-      return res.status(403).json({ error: "Acesso negado" });
-    }
-    
-    // Even if admin, check if blocked (rare but possible)
-    if (user.status === "BLOQUEADO") {
+    // Check if user status is ATIVO
+    if (user.status !== "ATIVO") {
+      // Log them out if inactive
       req.session.destroy(() => {});
       return res.status(403).json({ 
-        error: "Conta bloqueada. Entre em contato com o suporte.",
-        blocked: true,
-        status: user.status
+        error: "Acesso negado. Sua conta está inativa. Por favor, regularize o pagamento para continuar.",
+        inactive: true,
+        status: user.status 
       });
     }
     
-    // Attach user to request
-    (req as any).user = user;
-    // Also maintain backward compatibility with session.isAdmin
-    req.session.isAdmin = true;
     next();
   } catch (error) {
-    console.error("Error checking admin authentication:", error);
-    return res.status(500).json({ error: "Erro ao verificar autenticação de admin" });
+    console.error("Error checking user status:", error);
+    return res.status(500).json({ error: "Erro ao verificar status do usuário" });
   }
 };
 
-// checkUserStatus middleware removed - functionality consolidated into requireAuth and requireActiveUser
+// Middleware to check if user is admin
+const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.userId || !req.session.isAdmin) {
+    return res.status(403).json({ error: "Acesso negado" });
+  }
+  next();
+};
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // SECURITY: Validate webhook secret at startup (fail fast) - MANDATORY
@@ -244,7 +173,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (user.status === "BLOQUEADO") {
         console.log(`🚫 [LOGIN] User ${email} is BLOQUEADO - denying access`);
         return res.status(403).json({ 
-          error: "Conta bloqueada. Entre em contato com o suporte via WhatsApp.",
+          error: "Sua conta foi bloqueada. Entre em contato com o suporte.",
           blocked: true,
           status: user.status
         });
@@ -277,7 +206,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       req.session.userId = user.id;
-      req.session.isAdmin = user.isAdmin;
+      req.session.isAdmin = user.isAdmin === "true";
 
       // Don't send password to client
       const { password: _, ...userWithoutPassword } = user;
@@ -302,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { email, password } = req.body;
       
       const user = await storage.getUserByEmail(email);
-      if (!user || !user.isAdmin) {
+      if (!user || user.isAdmin !== "true") {
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 
@@ -489,7 +418,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email,
         password: null, // Will be set by user via email link
         status: "INATIVO", // Not active until password is created
-        isAdmin: false,
+        isAdmin: "false",
         discount: 0, // Default discount
       });
 
@@ -940,43 +869,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/user-services", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
-      const userServices = await storage.getUserServicesWithDetails(userId);
-      
-      // Enrich services with plan and service information
-      const enrichedServices = await Promise.all(
-        userServices.map(async (us) => {
-          const service = await storage.getService(us.serviceId);
-          // Only fetch plan if planId exists (for RemoveBG service)
-          let plan = null;
-          if (us.planId) {
-            try {
-              plan = await storage.getServicePlan(us.planId);
-            } catch (error) {
-              console.error(`Error fetching plan ${us.planId}:`, error);
-              plan = null;
-            }
-          }
-          
-          // Calculate remaining credits for services with credit system
-          const remainingCredits = us.credits ? 
-            (us.credits - (us.creditsUsed || 0)) : 
-            (us.creditsAvailable || 0);
-          
-          return {
-            ...us,
-            serviceName: service?.nome,
-            serviceDescription: service?.descricao,
-            planId: us.planId,
-            planName: plan?.name,
-            planFeatures: plan?.features,
-            remainingCredits: remainingCredits,
-            totalCredits: us.credits || us.creditsAvailable || 0,
-            creditsUsed: us.creditsUsed || 0
-          };
-        })
-      );
-      
-      res.json(enrichedServices);
+      const userServices = await storage.getUserServices(userId);
+      res.json(userServices);
     } catch (error) {
       console.error("Get user services error:", error);
       res.status(500).json({ error: "Erro ao buscar serviços" });
@@ -986,7 +880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========== CREDENTIAL ROUTES ==========
   
   // Get user's credentials (controlled by UserServices.status, not user.status)
-  app.get("/api/credentials", requireAuth, requireActiveUser, async (req, res) => {
+  app.get("/api/credentials", requireAuth, async (req, res) => {
     try {
       const userId = req.session.userId!;
       const user = await storage.getUser(userId);
@@ -1013,32 +907,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Get credentials error:", error);
       res.status(500).json({ error: "Erro ao buscar credenciais" });
-    }
-  });
-
-  // Get credentials for a specific service - checks if user has active access
-  app.get("/api/credentials/:serviceId", requireAuth, requireActiveUser, async (req, res) => {
-    try {
-      const userId = req.session.userId!;
-      const { serviceId } = req.params;
-      
-      // Verify if the user has access to this specific service
-      const userService = await storage.getUserService(userId, serviceId);
-      
-      if (!userService || userService.status !== "ATIVO") {
-        return res.status(403).json({ 
-          error: "Você não tem acesso ativo a este serviço. Faça uma assinatura.",
-          needsSubscription: true
-        });
-      }
-      
-      // Get credentials for this user and service
-      const credentials = await storage.getCredentialsByUserAndServices(userId, [serviceId]);
-      
-      res.json({ credentials });
-    } catch (error) {
-      console.error("Get service credentials error:", error);
-      res.status(500).json({ error: "Erro ao buscar credenciais do serviço" });
     }
   });
 
@@ -1597,39 +1465,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Use serviceId from request or fallback to default
         const serviceId = requestServiceId || DEFAULT_SERVICE_ID;
         
-        // Check if there's already a recent pending payment for this user and service (within 1 hour)
-        const recentPendingPayment = await storage.getRecentPendingPayment(
-          req.session.userId!,
-          serviceId,
-          60 * 60 * 1000 // 1 hour window
-        );
+        // Check if there's already a pending payment for this user and service
+        const existingPendingPayment = await storage.getPendingPayment(req.session.userId!, serviceId);
         
-        if (recentPendingPayment) {
-          // Reuse the existing pending payment - just update with new PIX data
+        if (existingPendingPayment) {
+          // Reuse the existing pending payment
           console.log(`🔁 [PIX Payment] Reusing existing pending payment:
-            - Payment ID: ${recentPendingPayment.id}
-            - Previous TXID: ${recentPendingPayment.txid}
-            - Created at: ${recentPendingPayment.createdAt}`);
+            - Payment ID: ${existingPendingPayment.id}
+            - TXID: ${existingPendingPayment.txid}
+            - Created at: ${existingPendingPayment.createdAt}`);
           
-          // Update the existing payment with new PIX data (new QR code)
-          payment = await storage.updatePayment(recentPendingPayment.id, {
+          // Update the existing payment with new PIX data
+          payment = await storage.updatePayment(existingPendingPayment.id, {
             txid: pixTxid,
             pushinpayId: pixTxid,
             amount: amountInCents.toString(),
-            planId: planId || recentPendingPayment.planId, // Keep planId if updating
           });
           
           console.log(`✅ [PIX Payment] Updated existing pending payment with new PIX data`);
         } else {
-          // Before creating new payment, expire old pending payments (older than 1 hour)
-          await storage.expireOldPendingPayments(req.session.userId!, serviceId);
-          console.log(`🧹 [PIX Payment] Expired old pending payments for user ${req.session.userId} and service ${serviceId}`);
-          
-          // Create new payment only if no recent pending payment exists
+          // Create new payment only if no pending payment exists
           const paymentData = {
             userId: req.session.userId!,
             serviceId, // Use the service from request or default
-            planId: planId || null, // Include planId from request
             amount: amountInCents.toString(), // Store cents as string (decimal column)
             status: "pending" as const,
             txid: pixTxid, // Use REAL PIX ID as primary txid
@@ -1852,7 +1710,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return {
             ...payment,
             userEmail: user?.email || "Unknown",
-            serviceName: service?.nome || "N/A",
+            serviceName: service?.name || "N/A",
           };
         })
       );
@@ -2064,7 +1922,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         email,
         password: hashedPassword, // Will be null if sending email, or hashed password if manual
         status: status || (shouldSendEmail ? "PENDENTE" : "ATIVO"), // Default to ATIVO if password is set manually
-        isAdmin: false,
+        isAdmin: "false",
         discount: 0, // Default discount
       });
 
@@ -2461,10 +2319,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Update payment status
         await storage.updatePayment(payment.id, { status: "paid" });
         
-        // Mark all other pending payments for the same user and service as expired/canceled
+        // Cancel all other pending payments for the same user and service
         const serviceId = payment.serviceId || DEFAULT_SERVICE_ID;
-        await storage.markOldPendingPaymentsAsExpired(payment.userId, serviceId, payment.id);
-        console.log(`🚫 [WEBHOOK] Marked all other pending payments as expired for user ${payment.userId} and service ${serviceId}`);
+        await storage.cancelPendingPayments(payment.userId, serviceId, receivedTxid);
+        console.log(`🚫 [WEBHOOK] Cancelled all other pending payments for user ${payment.userId} and service ${serviceId}`);
         
         // Calculate next payment date: Always day 5 of next month
         const nextPaymentDate = new Date();
@@ -2479,65 +2337,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           nextPaymentDate: nextPaymentDate, // Set next vencimento (day 5 of next month)
         });
         
-        // Get existing user_service to update it
-        const existingUserService = await storage.getUserService(payment.userId, serviceId);
-        
-        // Get credits from plan if planId is provided
-        let creditsToAdd = 0;
-        if (payment.planId) {
-          const plan = await storage.getServicePlan(payment.planId);
-          // Extract credits from features if available (for RemoveBG plans)
-          if (plan && plan.features) {
-            try {
-              const features = typeof plan.features === 'string' ? JSON.parse(plan.features) : plan.features;
-              // Look for credits in features array
-              const creditFeature = features.find((f: string) => f.includes('créditos') || f.includes('credits'));
-              if (creditFeature) {
-                const match = creditFeature.match(/\d+/);
-                if (match) {
-                  creditsToAdd = parseInt(match[0], 10);
-                }
-              }
-            } catch (e) {
-              console.error("Error parsing plan features:", e);
-            }
-          }
-        }
-        
-        if (existingUserService) {
-          // Update existing UserService with planId and activate it
-          await storage.updateUserService(existingUserService.id, {
-            status: "ATIVO",
-            ultimoPagamento: new Date(),
-            proximoPagamento: nextPaymentDate,
-            planId: payment.planId || existingUserService.planId,
-            lastPaymentDate: new Date(),
-            credits: creditsToAdd > 0 ? creditsToAdd : existingUserService.credits,
-            creditsAvailable: creditsToAdd > 0 ? creditsToAdd : existingUserService.creditsAvailable
-          });
-          console.log(`UserService ${existingUserService.id} updated for user ${payment.userId} and service ${serviceId} with planId: ${payment.planId}`);
-        } else {
-          // Create new UserService if it doesn't exist (backward compatibility)
-          const userService = await storage.createUserService({
-            userId: payment.userId,
-            serviceId: serviceId,
-            status: "ATIVO",
-            ultimoPagamento: new Date(),
-            proximoPagamento: nextPaymentDate,
-            planId: payment.planId || null,
-            lastPaymentDate: new Date(),
-            credits: creditsToAdd,
-            creditsAvailable: creditsToAdd
-          });
-          console.log(`UserService ${userService.id} created for user ${payment.userId} and service ${serviceId} with planId: ${payment.planId}`);
-        }
-        
-        // Mark old pending payments as expired (except this one)
-        await storage.markOldPendingPaymentsAsExpired(
-          payment.userId,
-          serviceId,
-          payment.id
-        );
+        // Upsert UserService - idempotent operation that handles duplicates gracefully
+        // serviceId already declared above
+        const userService = await storage.upsertUserService({
+          userId: payment.userId,
+          serviceId: serviceId,
+          status: "ATIVO",
+          ultimoPagamento: new Date(),
+          proximoPagamento: nextPaymentDate,
+        });
+        console.log(`UserService ${userService.id} upserted for user ${payment.userId} and service ${serviceId}`);
         
         console.log(`User ${payment.userId} activated successfully (next payment: ${nextPaymentDate.toISOString().split('T')[0]} - day 5 of next month)`);
         
@@ -2864,40 +2673,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { serviceId } = req.params;
       const updates = req.body;
       
-      // DEBUG: Log para ver o que está sendo recebido
-      console.log("🔍 [UPDATE SERVICE] Received updates:", {
-        serviceId,
-        updates,
-        updateKeys: Object.keys(updates),
-        types: Object.entries(updates).map(([k, v]) => `${k}: ${typeof v}`)
-      });
-      
-      // Filter out timestamp and id fields that shouldn't be updated
-      const processedUpdates = { ...updates };
-      delete processedUpdates.id;
-      delete processedUpdates.createdAt;
-      delete processedUpdates.created_at;
-      
-      // Garantir que preco seja string se for número
-      if (processedUpdates.preco !== undefined && typeof processedUpdates.preco === 'number') {
-        processedUpdates.preco = processedUpdates.preco.toString();
-      }
-      
-      console.log("🔄 [UPDATE SERVICE] Processed updates (filtered):", processedUpdates);
-      
-      const service = await storage.updateService(serviceId, processedUpdates);
+      const service = await storage.updateService(serviceId, updates);
       
       if (!service) {
-        console.error("❌ [UPDATE SERVICE] Service not found:", serviceId);
         return res.status(404).json({ error: "Serviço não encontrado" });
       }
       
-      console.log("✅ [UPDATE SERVICE] Service updated successfully:", service);
       res.json(service);
     } catch (error) {
-      console.error("❌ [UPDATE SERVICE] Error updating service:", error);
-      console.error("Stack trace:", error.stack);
-      res.status(500).json({ error: "Erro ao atualizar serviço", details: error.message });
+      console.error("Error updating service:", error);
+      res.status(500).json({ error: "Erro ao atualizar serviço" });
     }
   });
 
@@ -3052,594 +2837,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ========== REMOVEBG ROUTES ==========
   app.use("/api/removebg", removeBgRoutes);
-
-  // ========== ADMIN SERVICE MANAGEMENT ROUTES ==========
-  // Get all services (admin)
-  app.get("/api/admin/services", requireAdmin, async (req, res) => {
-    try {
-      const services = await storage.getAllServices();
-      res.json(services);
-    } catch (error) {
-      console.error("Error fetching services:", error);
-      res.status(500).json({ error: "Erro ao buscar serviços" });
-    }
-  });
-
-  // Create new service (admin)
-  app.post("/api/admin/services", requireAdmin, async (req, res) => {
-    try {
-      const { nome, descricao, preco, ativo } = req.body;
-      
-      if (!nome || !preco) {
-        return res.status(400).json({ error: "Nome e preço são obrigatórios" });
-      }
-      
-      const service = await storage.createService({
-        nome,
-        descricao: descricao || null,
-        preco,
-        ativo: ativo !== undefined ? ativo : true
-      });
-      
-      res.status(201).json(service);
-    } catch (error) {
-      console.error("Error creating service:", error);
-      res.status(500).json({ error: "Erro ao criar serviço" });
-    }
-  });
-
-  // Update service (admin)
-  app.put("/api/admin/services/:id", requireAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const updates = req.body;
-      
-      // DEBUG: Log para ver o que está sendo recebido
-      console.log("🔍 [UPDATE SERVICE PUT] Received updates:", {
-        serviceId: id,
-        updates,
-        updateKeys: Object.keys(updates),
-        types: Object.entries(updates).map(([k, v]) => `${k}: ${typeof v}`)
-      });
-      
-      // Filter out timestamp and id fields that shouldn't be updated
-      const processedUpdates = { ...updates };
-      delete processedUpdates.id;
-      delete processedUpdates.createdAt;
-      delete processedUpdates.created_at;
-      
-      // Garantir que preco seja string se for número
-      if (processedUpdates.preco !== undefined && typeof processedUpdates.preco === 'number') {
-        processedUpdates.preco = processedUpdates.preco.toString();
-      }
-      
-      console.log("🔄 [UPDATE SERVICE PUT] Processed updates (filtered):", processedUpdates);
-      
-      const service = await storage.updateService(id, processedUpdates);
-      
-      if (!service) {
-        console.error("❌ [UPDATE SERVICE PUT] Service not found:", id);
-        return res.status(404).json({ error: "Serviço não encontrado" });
-      }
-      
-      console.log("✅ [UPDATE SERVICE PUT] Service updated successfully:", service);
-      res.json(service);
-    } catch (error) {
-      console.error("❌ [UPDATE SERVICE PUT] Error updating service:", error);
-      console.error("Stack trace:", error.stack);
-      res.status(500).json({ error: "Erro ao atualizar serviço", details: error.message });
-    }
-  });
-
-  // Delete service (admin)
-  app.delete("/api/admin/services/:id", requireAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      // Check if service has active subscriptions
-      const subscriptions = await storage.getUserServicesByServiceId(id);
-      const activeSubscriptions = subscriptions.filter(s => s.status === "ATIVO");
-      
-      if (activeSubscriptions.length > 0) {
-        return res.status(400).json({ 
-          error: `Não é possível excluir: ${activeSubscriptions.length} assinaturas ativas` 
-        });
-      }
-      
-      // First, deactivate the service
-      await storage.updateService(id, { ativo: false });
-      
-      res.json({ success: true, message: "Serviço desativado com sucesso" });
-    } catch (error) {
-      console.error("Error deleting service:", error);
-      res.status(500).json({ error: "Erro ao excluir serviço" });
-    }
-  });
-
-  // ========== SERVICE PLANS ENDPOINTS ==========
-  app.get("/api/admin/service-plans", requireAdmin, async (req, res) => {
-    try {
-      const { serviceId } = req.query;
-      
-      let plans;
-      if (serviceId && typeof serviceId === 'string') {
-        plans = await storage.getServicePlansByServiceId(serviceId);
-      } else {
-        plans = await storage.getAllServicePlans();
-      }
-      
-      res.json(plans);
-    } catch (error) {
-      console.error("Error fetching service plans:", error);
-      res.status(500).json({ error: "Erro ao buscar planos de serviço" });
-    }
-  });
-
-  app.post("/api/admin/service-plans", requireAdmin, async (req, res) => {
-    try {
-      const { insertServicePlanSchema } = await import("@shared/schema");
-      
-      // Validate request body
-      const validation = insertServicePlanSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          error: "Dados inválidos", 
-          details: validation.error.errors 
-        });
-      }
-      
-      // Create the service plan
-      const plan = await storage.createServicePlan(validation.data);
-      res.status(201).json(plan);
-    } catch (error: any) {
-      console.error("Error creating service plan:", error);
-      if (error.message?.includes("does not exist")) {
-        res.status(400).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: "Erro ao criar plano de serviço" });
-      }
-    }
-  });
-
-  app.put("/api/admin/service-plans/:id", requireAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { updateServicePlanSchema } = await import("@shared/schema");
-      
-      // Validate request body
-      const validation = updateServicePlanSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          error: "Dados inválidos", 
-          details: validation.error.errors 
-        });
-      }
-      
-      // Update the service plan
-      const plan = await storage.updateServicePlan(id, validation.data);
-      if (!plan) {
-        return res.status(404).json({ error: "Plano não encontrado" });
-      }
-      
-      res.json(plan);
-    } catch (error) {
-      console.error("Error updating service plan:", error);
-      res.status(500).json({ error: "Erro ao atualizar plano de serviço" });
-    }
-  });
-
-  app.delete("/api/admin/service-plans/:id", requireAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      // Check if plan exists
-      const plan = await storage.getServicePlan(id);
-      if (!plan) {
-        return res.status(404).json({ error: "Plano não encontrado" });
-      }
-      
-      // TODO: Check if there are active subscriptions using this plan
-      // For now, we'll just soft delete it
-      const deleted = await storage.deleteServicePlan(id);
-      if (!deleted) {
-        return res.status(400).json({ error: "Não foi possível deletar o plano" });
-      }
-      
-      res.json({ success: true, message: "Plano desativado com sucesso" });
-    } catch (error) {
-      console.error("Error deleting service plan:", error);
-      res.status(500).json({ error: "Erro ao deletar plano de serviço" });
-    }
-  });
-
-  // ========== CATEGORIES ENDPOINTS ==========
-  app.get("/api/admin/categories", requireAdmin, async (req, res) => {
-    try {
-      const categories = await storage.getAllCategories();
-      res.json(categories);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-      res.status(500).json({ error: "Erro ao buscar categorias" });
-    }
-  });
-
-  app.post("/api/admin/categories", requireAdmin, async (req, res) => {
-    try {
-      const { insertCategorySchema } = await import("@shared/schema");
-      
-      // Validate request body
-      const validation = insertCategorySchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          error: "Dados inválidos", 
-          details: validation.error.errors 
-        });
-      }
-      
-      // Create the category
-      const category = await storage.createCategory(validation.data);
-      res.status(201).json(category);
-    } catch (error: any) {
-      console.error("Error creating category:", error);
-      if (error.message?.includes("already exists")) {
-        res.status(400).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: "Erro ao criar categoria" });
-      }
-    }
-  });
-
-  app.put("/api/admin/categories/:id", requireAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { updateCategorySchema } = await import("@shared/schema");
-      
-      // Validate request body
-      const validation = updateCategorySchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ 
-          error: "Dados inválidos", 
-          details: validation.error.errors 
-        });
-      }
-      
-      // Update the category
-      const category = await storage.updateCategory(id, validation.data);
-      if (!category) {
-        return res.status(404).json({ error: "Categoria não encontrada" });
-      }
-      
-      res.json(category);
-    } catch (error) {
-      console.error("Error updating category:", error);
-      res.status(500).json({ error: "Erro ao atualizar categoria" });
-    }
-  });
-
-  app.delete("/api/admin/categories/:id", requireAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      
-      // Check if category exists
-      const category = await storage.getCategory(id);
-      if (!category) {
-        return res.status(404).json({ error: "Categoria não encontrada" });
-      }
-      
-      // Try to delete (will fail if services are using this category)
-      const deleted = await storage.deleteCategory(id);
-      if (!deleted) {
-        return res.status(400).json({ 
-          error: "Não foi possível deletar a categoria. Verifique se existem serviços usando esta categoria." 
-        });
-      }
-      
-      res.json({ success: true, message: "Categoria deletada com sucesso" });
-    } catch (error) {
-      console.error("Error deleting category:", error);
-      res.status(500).json({ error: "Erro ao deletar categoria" });
-    }
-  });
-
-  // ========== SERVICES ROUTES (NEW) ==========
-  // Get all active services
-  app.get("/api/services", async (req, res) => {
-    try {
-      const services = await storage.getActiveServices();
-      
-      // Transform service data for marketplace display
-      const marketplaceServices = services.map(service => {
-        // Define categories based on service ID
-        let category = "Geral";
-        let features: string[] = [];
-        let isPopular = false;
-        let isHighlight = false;
-        
-        if (service.id === "vectorizer-001") {
-          category = "Produtividade";
-          features = [
-            "Vetorização ilimitada",
-            "Alta qualidade",
-            "Suporte API",
-            "Processamento em lote"
-          ];
-          isPopular = true;
-        } else if (service.id === "removebg-001") {
-          category = "Imagens";
-          features = [
-            "Precisão com IA",
-            "HD e 4K",
-            "PNG transparente",
-            "Processamento rápido"
-          ];
-          isHighlight = true;
-        }
-        
-        return {
-          id: service.id,
-          nome: service.nome,
-          descricao: service.descricao,
-          preco: service.preco,
-          ativo: service.ativo,
-          category,
-          features,
-          isPopular,
-          isHighlight
-        };
-      });
-      
-      res.json(marketplaceServices);
-    } catch (error) {
-      console.error("Error fetching marketplace services:", error);
-      res.status(500).json({ error: "Erro ao buscar serviços" });
-    }
-  });
-
-  // Get service categories
-  app.get("/api/services/categories", async (req, res) => {
-    try {
-      const services = await storage.getActiveServices();
-      
-      // Define categories with service mapping
-      const categoryMap = new Map();
-      services.forEach(service => {
-        let category = "Geral";
-        if (service.id === "vectorizer-001") {
-          category = "Produtividade";
-        } else if (service.id === "removebg-001") {
-          category = "Imagens";
-        }
-        categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
-      });
-      
-      const categories = [
-        { name: "Todos", count: services.length },
-        ...Array.from(categoryMap.entries()).map(([name, count]) => ({
-          name,
-          count
-        }))
-      ];
-      
-      res.json(categories);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-      res.status(500).json({ error: "Erro ao buscar categorias" });
-    }
-  });
-
-  // Get service details by ID
-  app.get("/api/services/:id", async (req, res) => {
-    try {
-      const service = await storage.getService(req.params.id);
-      
-      if (!service) {
-        return res.status(404).json({ error: "Serviço não encontrado" });
-      }
-      
-      res.json(service);
-    } catch (error) {
-      console.error("Error fetching service details:", error);
-      res.status(500).json({ error: "Erro ao buscar detalhes do serviço" });
-    }
-  });
-
-  // Subscribe to a service (requires auth)
-  app.post("/api/services/subscribe", requireAuth, async (req, res) => {
-    try {
-      const { serviceId, planId } = req.body;
-      const userId = req.session.userId;
-      
-      if (!serviceId) {
-        return res.status(400).json({ error: "ID do serviço é obrigatório" });
-      }
-      
-      // Validate service exists and is active
-      const service = await storage.getService(serviceId);
-      if (!service || !service.ativo) {
-        return res.status(404).json({ error: "Serviço não encontrado ou inativo" });
-      }
-      
-      // Validate plan if provided
-      let plan = null;
-      if (planId) {
-        plan = await storage.getServicePlan(planId);
-        if (!plan || plan.serviceId !== serviceId || !plan.isActive) {
-          return res.status(400).json({ error: "Plano inválido para este serviço" });
-        }
-      }
-      
-      // Check if user already has this service
-      const existingUserService = await storage.getUserService(userId!, serviceId);
-      
-      if (existingUserService) {
-        if (existingUserService.status === "ATIVO") {
-          return res.status(400).json({ 
-            error: "Você já possui uma assinatura ativa deste serviço",
-            redirect: "/payment" 
-          });
-        }
-        // Update existing user_service with new planId
-        await storage.updateUserService(existingUserService.id, {
-          planId: planId || null,
-          status: "PENDENTE"
-        });
-      } else {
-        // Create new user_service
-        await storage.createUserService({
-          userId: userId!,
-          serviceId,
-          planId: planId || null,
-          status: "PENDENTE",
-          proximoPagamento: null
-        });
-      }
-      
-      // Calculate payment amount (use plan price if available, otherwise service price)
-      const amountInReais = plan ? parseFloat(plan.price) : parseFloat(service.preco);
-      const amountInCents = Math.round(amountInReais * 100);
-      
-      // Create pending payment
-      const payment = await storage.createPayment({
-        userId: userId!,
-        serviceId,
-        planId: planId || null,
-        amount: amountInCents.toString(),
-        status: "pending",
-        txid: null,
-        pushinpayId: null
-      });
-      
-      res.json({ 
-        success: true, 
-        message: "Serviço adicionado! Efetue o pagamento para ativar.",
-        paymentId: payment.id,
-        redirect: "/payment"
-      });
-    } catch (error) {
-      console.error("Error subscribing to service:", error);
-      res.status(500).json({ error: "Erro ao adicionar serviço" });
-    }
-  });
-  
-  // ========== MARKETPLACE ROUTES (LEGACY ALIASES) ==========
-  // These endpoints are maintained for backward compatibility
-  // They delegate to the same logic as the new /api/services endpoints
-  
-  // Legacy: Get all active services for marketplace
-  app.get("/api/marketplace/services", async (req, res) => {
-    try {
-      const services = await storage.getActiveServices();
-      
-      // Transform service data for marketplace display
-      const marketplaceServices = services.map(service => {
-        // Define categories based on service ID
-        let category = "Geral";
-        let features: string[] = [];
-        let isPopular = false;
-        let isHighlight = false;
-        
-        if (service.id === "vectorizer-001") {
-          category = "Produtividade";
-          features = [
-            "Vetorização ilimitada",
-            "Alta qualidade",
-            "Suporte API",
-            "Processamento em lote"
-          ];
-          isPopular = true;
-        } else if (service.id === "removebg-001") {
-          category = "Imagens";
-          features = [
-            "Precisão com IA",
-            "HD e 4K",
-            "PNG transparente",
-            "Processamento rápido"
-          ];
-          isHighlight = true;
-        }
-        
-        return {
-          id: service.id,
-          nome: service.nome,
-          descricao: service.descricao,
-          preco: service.preco,
-          ativo: service.ativo,
-          category,
-          features,
-          isPopular,
-          isHighlight
-        };
-      });
-      
-      res.json(marketplaceServices);
-    } catch (error) {
-      console.error("Error fetching marketplace services:", error);
-      res.status(500).json({ error: "Erro ao buscar serviços" });
-    }
-  });
-  
-  // Legacy: Get service categories
-  app.get("/api/marketplace/categories", async (req, res) => {
-    try {
-      const categories = await storage.getAllCategories();
-      res.json(categories);
-    } catch (error) {
-      console.error("Error fetching categories:", error);
-      res.status(500).json({ error: "Erro ao buscar categorias" });
-    }
-  });
-  
-  // Legacy: Get service details by ID
-  app.get("/api/marketplace/services/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const service = await storage.getService(id);
-      
-      if (!service || !service.ativo) {
-        return res.status(404).json({ error: "Serviço não encontrado ou inativo" });
-      }
-      
-      res.json(service);
-    } catch (error) {
-      console.error("Error fetching service:", error);
-      res.status(500).json({ error: "Erro ao buscar serviço" });
-    }
-  });
-  
-  // Legacy: Subscribe to a service
-  app.post("/api/marketplace/subscribe", requireAuth, async (req, res) => {
-    try {
-      const { serviceId } = req.body;
-      const userId = req.session.userId;
-      
-      if (!serviceId) {
-        return res.status(400).json({ error: "Service ID is required" });
-      }
-      
-      // Verify service exists and is active
-      const service = await storage.getService(serviceId);
-      if (!service || !service.ativo) {
-        return res.status(404).json({ error: "Serviço não encontrado ou inativo" });
-      }
-      
-      // Create inactive subscription (will be activated after payment)
-      await storage.createUserService({
-        userId: userId!,
-        serviceId,
-        status: "INATIVO",
-        proximoPagamento: null
-      });
-      
-      res.json({ 
-        success: true, 
-        message: "Serviço adicionado! Efetue o pagamento para ativar.",
-        redirect: "/payment"
-      });
-    } catch (error) {
-      console.error("Error subscribing to service:", error);
-      res.status(500).json({ error: "Erro ao adicionar serviço" });
-    }
-  });
   
   // RemoveBG API Token Management Routes (Admin only)
   app.get("/api/admin/removebg-tokens", requireAdmin, async (req, res) => {

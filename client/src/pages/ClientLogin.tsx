@@ -19,7 +19,7 @@ export default function ClientLogin() {
   });
 
   useEffect(() => {
-    if (userData?.user && !userData.user.isAdmin) {
+    if (userData?.user && userData.user.isAdmin !== "true") {
       setLocation('/dashboard');
     }
   }, [userData, setLocation]);

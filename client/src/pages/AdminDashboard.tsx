@@ -12,7 +12,6 @@ import PaymentHistoryDrawer from "@/components/PaymentHistoryDrawer";
 import AdminRemoveBgPanel from "@/components/AdminRemoveBgPanel";
 import AdminRemoveBgUsage from "@/components/AdminRemoveBgUsage";
 import AdminRemoveBgStats from "@/components/AdminRemoveBgStats";
-import AdminServiceManagementV2 from "./AdminServiceManagementV2";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import UserFormDialog from "@/components/UserFormDialog";
 import { Button } from "@/components/ui/button";
@@ -35,7 +34,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { Credential, Payment, User as UserType, Service } from "@shared/schema";
-import { CreditCard, Download, Key, LogOut, Users, Image, BarChart3, Settings, Package } from "lucide-react";
+import { CreditCard, Download, Key, LogOut, Users, Image, BarChart3, Settings } from "lucide-react";
 
 type AuthMeResponse = { user: UserType };
 type PaymentWithUser = Payment & { userEmail: string };
@@ -73,7 +72,7 @@ export default function AdminDashboard() {
 
   // Redirect if not authenticated or not admin
   useEffect(() => {
-    if (!authLoading && (!currentUser?.user || !currentUser.user.isAdmin)) {
+    if (!authLoading && (!currentUser?.user || currentUser.user.isAdmin !== "true")) {
       setLocation('/admin/login');
     }
   }, [currentUser, authLoading, setLocation]);
@@ -91,22 +90,22 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Erro ao buscar usuários");
       return res.json();
     },
-    enabled: !!currentUser?.user && currentUser.user.isAdmin,
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
   const { data: paymentsData, isLoading: paymentsLoading } = useQuery<PaymentWithUser[]>({
     queryKey: ['/api/admin/payments'],
-    enabled: !!currentUser?.user && currentUser.user.isAdmin,
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
   const { data: credentialsData, isLoading: credentialsLoading } = useQuery<Credential[]>({
     queryKey: ['/api/admin/credentials'],
-    enabled: !!currentUser?.user && currentUser.user.isAdmin,
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
   const { data: servicesData, isLoading: servicesLoading } = useQuery<(Service & { activeSubscribers?: number; totalSubscribers?: number })[]>({
     queryKey: ['/api/admin/services'],
-    enabled: !!currentUser?.user && currentUser.user.isAdmin,
+    enabled: !!currentUser?.user && currentUser.user.isAdmin === "true",
   });
 
   // Mutations
@@ -248,7 +247,6 @@ export default function AdminDashboard() {
 
   const menuItems = [
     { title: "Serviços", icon: Settings, id: "services" },
-    { title: "Serviços", icon: Package, id: "marketplace" },
     { title: "Usuários", icon: Users, id: "users" },
     { title: "Pagamentos", icon: CreditCard, id: "payments" },
     { title: "RemoveBG", icon: Image, id: "removebg" },
@@ -574,10 +572,6 @@ export default function AdminDashboard() {
                     </TabsContent>
                   </Tabs>
                 </div>
-              )}
-
-              {activeTab === "marketplace" && (
-                <AdminServiceManagementV2 />
               )}
 
               {activeTab === "services" && (
