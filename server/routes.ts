@@ -1205,15 +1205,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Helper function to add padding to QR code image
-  async function addPaddingToQRCode(base64String: string, padding: number = 40): Promise<string> {
+  // Lazy initialization for Sharp to avoid repeated heavy setup
+  let sharpInstance: typeof sharp | null = null;
+  
+  // Helper function to add padding to QR code image with better error handling
+  async function addPaddingToQRCode(base64String: string, padding: number = 50): Promise<string> {
     try {
+      // Skip if no base64 string provided
+      if (!base64String) {
+        console.log("⚠️ [QR Padding] No base64 string provided, skipping padding");
+        return base64String;
+      }
+      
       // Remove data URL prefix if present
       const base64Data = base64String.replace(/^data:image\/\w+;base64,/, '');
+      
+      // Skip if the base64 data is too small (likely already has padding or is invalid)
+      if (base64Data.length < 100) {
+        console.log("⚠️ [QR Padding] Base64 data too small, likely invalid or already padded");
+        return base64String;
+      }
+      
       const buffer = Buffer.from(base64Data, 'base64');
       
-      // Add padding using Sharp
-      const paddedBuffer = await sharp(buffer)
+      // Initialize Sharp lazily to avoid repeated setup cost
+      if (!sharpInstance) {
+        sharpInstance = sharp;
+      }
+      
+      // Add padding using Sharp with timeout protection
+      const paddingPromise = sharpInstance(buffer)
         .extend({
           top: padding,
           bottom: padding,
@@ -1223,11 +1244,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
         .toBuffer();
       
+      // Add timeout to prevent hanging on slow Sharp operations
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Sharp operation timeout')), 3000)
+      );
+      
+      const paddedBuffer = await Promise.race([paddingPromise, timeoutPromise]);
+      
       // Return as base64 data URL
       return `data:image/png;base64,${paddedBuffer.toString('base64')}`;
     } catch (error) {
-      console.error("Error adding padding to QR code:", error);
-      // Return original if padding fails
+      console.warn("⚠️ [QR Padding] Failed to add padding, using original QR code:", error);
+      // CRITICAL: Return original on any error - don't fail payment generation
       return base64String;
     }
   }
@@ -1577,11 +1605,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         qrCodeBase64 = `data:image/png;base64,${qrCodeBase64}`;
       }
       
-      // Add padding to QR code for better readability
-      if (qrCodeBase64 && !isUsingDemoMode) {
-        console.log("📐 Adding padding to QR code for better readability...");
+      // Add padding to QR code for better readability (only for production QR codes)
+      const shouldAddPadding = qrCodeBase64 && !isUsingDemoMode && process.env.DISABLE_QR_PADDING !== 'true';
+      
+      if (shouldAddPadding) {
+        console.log(`📐 [QR Padding] Attempting to add padding (Demo: ${isUsingDemoMode}, Disabled: ${process.env.DISABLE_QR_PADDING === 'true'})`);
+        const originalQrCode = qrCodeBase64;
         qrCodeBase64 = await addPaddingToQRCode(qrCodeBase64, 50); // 50px padding on all sides
-        console.log("✅ Padding added to QR code successfully");
+        
+        if (qrCodeBase64 === originalQrCode) {
+          console.log("⚠️ [QR Padding] QR code unchanged (padding failed or was skipped)");
+        } else {
+          console.log("✅ [QR Padding] Successfully added 50px white padding to QR code");
+        }
+      } else {
+        console.log(`ℹ️ [QR Padding] Skipped - Demo: ${isUsingDemoMode}, Has QR: ${!!qrCodeBase64}, Disabled: ${process.env.DISABLE_QR_PADDING === 'true'}`);
       }
 
       // Prepare user-friendly message based on demo mode reason
