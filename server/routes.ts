@@ -229,9 +229,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/admin/login", adminLoginRateLimiter, async (req, res) => {
     try {
       const { email, password } = req.body;
+      console.log(`🔍 [ADMIN LOGIN] Attempting login for: ${email}`);
       
       const user = await storage.getUserByEmail(email);
-      if (!user || user.isAdmin !== "true") {
+      console.log(`🔍 [ADMIN LOGIN] User found:`, user ? { 
+        email: user.email, 
+        isAdmin: user.isAdmin, 
+        isAdminType: typeof user.isAdmin,
+        hasPassword: !!user.password 
+      } : null);
+      
+      // Accept both boolean true and string "true" for isAdmin field
+      const isAdmin = user?.isAdmin === true || user?.isAdmin === "true";
+      if (!user || !isAdmin) {
+        console.log(`❌ [ADMIN LOGIN] Failed: User not found or not admin. isAdmin = ${user?.isAdmin}`);
         return res.status(401).json({ error: "Credenciais inválidas" });
       }
 

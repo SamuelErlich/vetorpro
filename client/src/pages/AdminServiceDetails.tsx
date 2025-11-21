@@ -558,12 +558,12 @@ export default function ServiceDetails() {
                                       <Label className="text-sm text-muted-foreground">Plano Atual</Label>
                                       {isEditing ? (
                                         <Select
-                                          value={editingPlan?.planId || ""}
+                                          value={editingPlan?.planId || "none"}
                                           onValueChange={(value) => setEditingUserPlans(prev => ({
                                             ...prev,
                                             [subscriber.userId]: {
                                               ...prev[subscriber.userId],
-                                              planId: value || null,
+                                              planId: value === "none" ? null : value,
                                               credits: plansArray.find(p => p.id === value)?.credits || prev[subscriber.userId]?.credits || 0
                                             }
                                           }))}
@@ -572,7 +572,7 @@ export default function ServiceDetails() {
                                             <SelectValue placeholder="Selecione um plano" />
                                           </SelectTrigger>
                                           <SelectContent>
-                                            <SelectItem value="">Sem plano</SelectItem>
+                                            <SelectItem value="none">Sem plano</SelectItem>
                                             {plansArray.map(plan => (
                                               <SelectItem key={plan.id} value={plan.id}>
                                                 {plan.name} - R${plan.price} ({plan.credits} créditos)
@@ -649,7 +649,7 @@ export default function ServiceDetails() {
                                           const plan = editingUserPlans[subscriber.userId];
                                           updateUserPlanMutation.mutate({
                                             userId: subscriber.userId,
-                                            planId: plan.planId,
+                                            planId: plan.planId === "none" ? null : plan.planId,
                                             credits: plan.credits
                                           });
                                         }}
@@ -678,7 +678,7 @@ export default function ServiceDetails() {
                                       onClick={() => setEditingUserPlans(prev => ({
                                         ...prev,
                                         [subscriber.userId]: {
-                                          planId: subscriber.planId,
+                                          planId: subscriber.planId || "none",
                                           credits: subscriber.creditsAvailable || 0
                                         }
                                       }))}
