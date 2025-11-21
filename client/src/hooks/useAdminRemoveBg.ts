@@ -98,6 +98,8 @@ export function useAdminAdjustCredits() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/removebg/subscriptions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/removebg/usage"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/removebg/stats"] });
+      // Also invalidate user credits to refresh in client dashboard
+      queryClient.invalidateQueries({ queryKey: ["/api/removebg/credits"] });
     },
   });
 }

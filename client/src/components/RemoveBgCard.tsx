@@ -60,7 +60,7 @@ export default function RemoveBgCard({ userService, onSubscribe }: RemoveBgCardP
     enabled: isActive,
   });
 
-  const credits = creditsData?.credits ?? 0;
+  const credits = creditsData?.credits !== undefined ? creditsData.credits : 0;
   const usage = usageData?.data || [];
   const lastProcessed = usage.length > 0 ? usage[0] : null;
   
